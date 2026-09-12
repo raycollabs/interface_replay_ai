@@ -10,6 +10,7 @@ import {
   accountsPage,
   accountsFramePartial,
   unknownDialogPage,
+  unresolvableNoticePage,
   loadingPartial,
 } from './templates.js';
 
@@ -21,7 +22,12 @@ const PORT = Number(process.env.PORT ?? 4173);
 // condition fixtures: once-per-session state, not per-request.
 const sessions = new Map<
   string,
-  { authenticated: boolean; acknowledgedDialogs: Set<string>; slowLoadServed: Set<string> }
+  {
+    authenticated: boolean;
+    acknowledgedDialogs: Set<string>;
+    slowLoadServed: Set<string>;
+    escalationAcknowledged: Set<string>;
+  }
 >();
 
 const app = express();
@@ -47,7 +53,12 @@ app.post('/login', (req, res) => {
   const { username, password } = req.body ?? {};
   if (username === OPERATOR_CREDENTIALS.username && password === OPERATOR_CREDENTIALS.password) {
     const sid = randomUUID();
-    sessions.set(sid, { authenticated: true, acknowledgedDialogs: new Set(), slowLoadServed: new Set() });
+    sessions.set(sid, {
+      authenticated: true,
+      acknowledgedDialogs: new Set(),
+      slowLoadServed: new Set(),
+      escalationAcknowledged: new Set(),
+    });
     res.cookie('sid', sid, { httpOnly: true, sameSite: 'lax' });
     return res.redirect('/member-search');
   }
@@ -80,17 +91,27 @@ app.get('/member/:memberId', requireAuth, (req, res) => {
 // to this one ID (not "any member not yet acknowledged") is what keeps
 // 12345's happy path an actual zero-interstitial happy path.
 const DIALOG_GATED_MEMBER_ID = '44444';
+// 33333's notice is visually similar but deliberately NOT wired to any
+// auto-dismiss interstitial in the capability -- it exists to require a
+// human decision (Slice 5), not to be auto-recovered like 44444's.
+const ESCALATION_GATED_MEMBER_ID = '33333';
 
 app.get('/member/:memberId/accounts', requireAuth, (req, res) => {
   const member = MEMBERS[req.params.memberId];
   if (!member) return res.status(404).send(memberNotFoundPage(req.params.memberId));
 
-  // Slice 4: the unexpected-dialog case. Shown once per session for this
-  // one member; the real accounts content is withheld until acknowledged.
   const sid = req.cookies?.sid;
   const session = sid ? sessions.get(sid) : undefined;
+
+  // Slice 4: the unexpected-dialog case. Shown once per session for this
+  // one member; the real accounts content is withheld until acknowledged.
   if (session && member.memberId === DIALOG_GATED_MEMBER_ID && !session.acknowledgedDialogs.has(member.memberId)) {
     return res.send(unknownDialogPage(member.memberId));
+  }
+
+  // Slice 5: the genuinely-stuck case. No automatic path clears this one.
+  if (session && member.memberId === ESCALATION_GATED_MEMBER_ID && !session.escalationAcknowledged.has(member.memberId)) {
+    return res.send(unresolvableNoticePage(member.memberId));
   }
 
   res.send(accountsPage(member.memberId));
@@ -100,6 +121,16 @@ app.post('/member/:memberId/acknowledge', requireAuth, (req, res) => {
   const sid = req.cookies?.sid;
   const session = sid ? sessions.get(sid) : undefined;
   session?.acknowledgedDialogs.add(req.params.memberId);
+  res.redirect(`/member/${encodeURIComponent(req.params.memberId)}/accounts`);
+});
+
+// Deliberately not something the replay engine ever calls on its own --
+// only reachable by whoever (a human operator, in Slice 5's demo) decides
+// to click through the notice.
+app.post('/member/:memberId/escalate-acknowledge', requireAuth, (req, res) => {
+  const sid = req.cookies?.sid;
+  const session = sid ? sessions.get(sid) : undefined;
+  session?.escalationAcknowledged.add(req.params.memberId);
   res.redirect(`/member/${encodeURIComponent(req.params.memberId)}/accounts`);
 });
 

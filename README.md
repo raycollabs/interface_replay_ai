@@ -9,10 +9,11 @@ human when it can't safely proceed.
 > The model discovers. The artifact becomes a reusable capability.
 > Deterministic replay is how an AI agent invokes it in production.
 
-Build status: **Slice 4 of 9 complete** (contracts, target app, surface
-adapter + policy, deterministic replay engine, recoverable conditions). See
-[`docs/slices.md`](docs/slices.md) for the full plan and current progress,
-and `REPORT.md` (added from Slice 5) for the design write-up.
+Build status: **Slice 5 of 9 complete** (contracts, target app, surface
+adapter + policy, deterministic replay engine, recoverable conditions,
+session broker + human handoff). See [`docs/slices.md`](docs/slices.md)
+for the full plan and current progress, and `REPORT.md` (in progress) for
+the design write-up.
 
 ## Setup
 
@@ -110,6 +111,32 @@ npm run replay -- --capability member.read-savings-balance --version 1 \
 npm run replay -- --capability member.read-savings-balance --version 1 \
   --input memberId=55555 --evidence-dir evidence/replay-recovered-slow-load
 ```
+
+## Human handoff demo
+
+Member `33333` shows a notice the capability declares escalate-only —
+automation cannot safely clear it itself. Two terminals:
+
+```bash
+# Terminal 1: the replay worker. Suspends in place (same browser, same
+# page) instead of returning immediately, and waits up to 15 minutes for
+# an operator to resolve the intervention.
+npm run replay -- --capability member.read-savings-balance --version 1 \
+  --input memberId=33333 --evidence-dir evidence/replay-handoff \
+  --wait-for-handoff --resume-timeout-ms 900000
+
+# Terminal 2: the operator console -- a genuinely separate process that
+# attaches to the SAME live browser via CDP (see docs/slices.md's Slice 5
+# entry for why CDP specifically, not Playwright's own connect()).
+npm run operator -- --evidence-dir evidence/replay-handoff \
+  --capability member.read-savings-balance --version 1
+```
+
+Open `http://localhost:4500` — viewing the intervention claims it, "Click:
+Acknowledge and escalate" acts on the live session, and Resume (with an
+optional note) hands control back. Terminal 1 then re-grounds and
+completes on its own. `evidence/replay-handoff/events.jsonl` records the
+full `AUTOMATION -> HUMAN -> AUTOMATION` transfer with real timestamps.
 
 Each writes `run-state.json`, `events.jsonl`, `result.json`, and a
 screenshot into its `--evidence-dir`. `memberId` is declared `sensitive`

@@ -1,0 +1,20 @@
+{
+  "interventionId": "d619075f-a794-403a-b368-3815d12635f8",
+  "runId": "67fd4990-02c7-406f-8fd4-06e6e006015a",
+  "sessionId": "67fd4990-02c7-406f-8fd4-06e6e006015a",
+  "capabilityId": "member.read-savings-balance",
+  "goal": "Looks up a member by identifier and returns their current savings account balance.",
+  "stepId": "open-accounts",
+  "reasonCode": "INTERSTITIAL_UNHANDLED",
+  "explanation": "Replay could not safely proceed at step \"open-accounts\" (Open the member's accounts tab): INTERSTITIAL_UNHANDLED.",
+  "screenshotRef": "evidence/replay-handoff/needs-human.png",
+  "allowedHumanActions": [
+    "view",
+    "act",
+    "resume"
+  ],
+  "createdAt": "2026-09-12T14:55:52.304Z",
+  "status": "resolved",
+  "claimedBy": "operator-1",
+  "resolutionNote": "Verified this was a routine compliance flag, cleared for this account."
+}

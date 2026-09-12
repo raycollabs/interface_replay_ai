@@ -45,6 +45,17 @@ export const MEMBERS: Record<string, Member> = {
       { accountType: 'Savings', accountId: 'SAV-30456', balance: '15920.11', currency: 'USD' },
     ],
   },
+  // Slice 5: the genuinely-stuck case. Shows an "unresolvable" notice
+  // (distinct from 44444's auto-dismissable one) that the capability
+  // declares as escalate-only -- automation must not guess at it, a
+  // human has to look at it and decide.
+  '33333': {
+    memberId: '33333',
+    name: 'Dana Kowalski',
+    accounts: [
+      { accountType: 'Savings', accountId: 'SAV-77042', balance: '2650.00', currency: 'USD' },
+    ],
+  },
 };
 
 /** Synthetic operator credential for the demo login form. Not a real secret. */

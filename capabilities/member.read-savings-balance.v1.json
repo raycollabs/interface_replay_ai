@@ -13,7 +13,7 @@
   "executionModes": ["ATTENDED", "UNATTENDED"],
   "scope": {
     "allowedOrigins": ["http://localhost:4173"],
-    "allowedRoutes": ["/login", "/member-search", "/member/*", "/member/*/accounts", "/member/*/accounts-frame", "/member/*/acknowledge"],
+    "allowedRoutes": ["/login", "/member-search", "/member/*", "/member/*/accounts", "/member/*/accounts-frame", "/member/*/acknowledge", "/member/*/escalate-acknowledge"],
     "allowedActionTypes": ["navigate", "click", "type", "extract", "wait", "assert"]
   },
   "inputs": {
@@ -168,6 +168,18 @@
           "confidence": "high"
         }
       ]
+    },
+    "unresolvable notice acknowledgment": {
+      "semanticPurpose": "unresolvable notice acknowledgment",
+      "framePath": [],
+      "recordedRung": 2,
+      "candidates": [
+        {
+          "strategy": { "type": "role_and_name", "role": "button", "name": "Acknowledge and escalate", "exact": true },
+          "rationale": "Declared for reviewability (a human operator's console can offer this as a known action), but the capability's interstitial for this purpose is handle=escalate -- the replay engine itself never clicks it.",
+          "confidence": "high"
+        }
+      ]
     }
   },
 
@@ -195,6 +207,11 @@
       "match": { "type": "controlVisible", "semanticPurpose": "account data loading banner" },
       "handle": "retry",
       "maxAttempts": 2
+    },
+    {
+      "match": { "type": "controlVisible", "semanticPurpose": "unresolvable notice acknowledgment" },
+      "handle": "escalate",
+      "maxAttempts": 1
     }
   ],
   "steps": [

@@ -137,6 +137,26 @@ export function unknownDialogPage(memberId: string): string {
 }
 
 /**
+ * The genuinely-stuck case (Slice 5). Visually similar to 44444's dialog
+ * but with a different control name/wording, on a different semantic
+ * purpose the capability declares as escalate-only -- deliberately NOT
+ * auto-dismissable, unlike 44444's.
+ */
+export function unresolvableNoticePage(memberId: string): string {
+  return pageShell(
+    `Accounts — Member ${memberId}`,
+    `
+    <div role="alertdialog" aria-label="Notice" class="banner-error">
+      <p>This account carries a flag that requires manual review before account data can be displayed.</p>
+      <form method="post" action="/member/${memberId}/escalate-acknowledge">
+        <button type="submit">Acknowledge and escalate</button>
+      </form>
+    </div>
+  `,
+  );
+}
+
+/**
  * The "transient slow load, recovered by retry" case (Slice 4). Served
  * once per session in place of the real accounts-frame table.
  */

@@ -1,0 +1,9 @@
+{
+  "status": "success",
+  "outputs": {
+    "accountId": "SAV-77042",
+    "balance": "2650.00",
+    "currency": "USD"
+  },
+  "evidenceRef": "evidence/replay-handoff"
+}

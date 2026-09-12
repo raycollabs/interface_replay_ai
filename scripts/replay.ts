@@ -15,9 +15,18 @@ import { replay } from '../src/replay/engine.js';
 import type { PolicyContext } from '../src/policy/allowlist.js';
 
 function parseArgs(argv: string[]) {
-  const args: { capability?: string; version?: string; input: Record<string, string>; evidenceDir?: string; mode: 'ATTENDED' | 'UNATTENDED' } = {
+  const args: {
+    capability?: string;
+    version?: string;
+    input: Record<string, string>;
+    evidenceDir?: string;
+    mode: 'ATTENDED' | 'UNATTENDED';
+    waitForHandoff: boolean;
+    resumeTimeoutMs?: number;
+  } = {
     input: {},
     mode: 'UNATTENDED',
+    waitForHandoff: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -25,6 +34,8 @@ function parseArgs(argv: string[]) {
     else if (arg === '--version') args.version = argv[++i];
     else if (arg === '--evidence-dir') args.evidenceDir = argv[++i];
     else if (arg === '--mode') args.mode = argv[++i] as 'ATTENDED' | 'UNATTENDED';
+    else if (arg === '--wait-for-handoff') args.waitForHandoff = true;
+    else if (arg === '--resume-timeout-ms') args.resumeTimeoutMs = Number(argv[++i]);
     else if (arg === '--input') {
       const kv = argv[++i]!;
       const eq = kv.indexOf('=');
@@ -86,11 +97,21 @@ async function main() {
   console.log(`mode=REPLAY llmCalls=0`); // structurally guaranteed -- see engine.ts's header comment
   console.log(`capability=${capability.capabilityId}@${capability.version} inputs=${JSON.stringify(args.input)}`);
 
+  if (args.waitForHandoff) {
+    console.log(`(waiting for human handoff -- start the operator console in another terminal:\n  npm run operator -- --evidence-dir ${args.evidenceDir} --capability ${args.capability} --version ${args.version})`);
+  }
+
   const result = await replay(
     capability,
     args.input,
     policyCtx,
-    { evidenceDir: args.evidenceDir, mode: args.mode, headless: true },
+    {
+      evidenceDir: args.evidenceDir,
+      mode: args.mode,
+      headless: true,
+      suspendAndWaitForResume: args.waitForHandoff,
+      resumeTimeoutMs: args.resumeTimeoutMs,
+    },
     (page) => loginToTargetApp(page, baseUrl),
   );
 

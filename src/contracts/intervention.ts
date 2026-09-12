@@ -23,5 +23,9 @@ export const InterventionRequestSchema = z.object({
   createdAt: z.string().datetime(),
   status: z.enum(['open', 'claimed', 'resolved', 'expired']).default('open'),
   claimedBy: z.string().optional(),
+  /** Set by the operator console on resume; copied into the run's
+   *  operatorNotes by the replay engine -- this is the audit trail of
+   *  what the human did and why, not just that a human was involved. */
+  resolutionNote: z.string().optional(),
 });
 export type InterventionRequest = z.infer<typeof InterventionRequestSchema>;

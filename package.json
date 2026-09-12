@@ -12,7 +12,8 @@
     "emit:jsonschema": "tsx scripts/emit-json-schema.ts",
     "target-app": "tsx target-app/server.ts",
     "smoke:adapter": "tsx scripts/smoke-adapter.ts",
-    "replay": "tsx scripts/replay.ts"
+    "replay": "tsx scripts/replay.ts",
+    "operator": "tsx scripts/operator-console.ts"
   },
   "dependencies": {
     "cookie-parser": "^1.4.7",

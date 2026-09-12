@@ -16,6 +16,7 @@ import { captureEvidenceScreenshot } from '../surface/evidence.js';
 import type { PolicyContext } from '../policy/allowlist.js';
 import { redact, sensitiveValuesFor } from '../policy/redact.js';
 import { appendEvent, saveResult, saveRunState } from './runStore.js';
+import { readIntervention, waitForResolution, writeIntervention, writeSessionHandle } from '../session/broker.js';
 
 /**
  * NOTE FOR REVIEWERS: this module makes zero calls to any LLM client. It
@@ -29,6 +30,22 @@ export interface ReplayOptions {
   evidenceDir: string;
   mode: RunMode;
   headless?: boolean;
+  /**
+   * When true, hitting a needs_human condition does NOT return
+   * immediately -- the run suspends in place (same browser, same page,
+   * lease released to NONE) and polls intervention.json for
+   * `status: 'resolved'`, exactly what the operator console writes on
+   * Resume. This is what makes "same live session" literal: the browser
+   * this ReplayRun holds is never closed while waiting, so a second
+   * process (the operator console) can attach to the identical session
+   * via the wsEndpoint written to session-handle.json.
+   * Default false preserves Slices 3/4's one-shot CLI behavior exactly
+   * (return needs_human immediately, caller decides what happens next).
+   */
+  suspendAndWaitForResume?: boolean;
+  /** How long to wait for an operator to resolve the intervention before
+   *  giving up and failing with ESCALATION_UNAVAILABLE. Default 10 min. */
+  resumeTimeoutMs?: number;
 }
 
 function nowIso(): string {
@@ -204,6 +221,163 @@ export class ReplayRun {
     return result;
   }
 
+  /**
+   * The single escalation path -- all three "we can't safely proceed"
+   * sites in run() below call this instead of duplicating the
+   * suspend/notify/wait logic three times. Ownership sequence:
+   * AUTOMATION -> NONE (here) -> HUMAN (operator claims) -> NONE
+   * (operator resumes) -> AUTOMATION (here, on the resume branch).
+   *
+   * Returns `{resume: true}` when an operator resolved the intervention
+   * (the caller re-grounds and continues from the SAME step); returns
+   * `{resume: false, result}` when the caller should return immediately
+   * -- either because suspendAndWaitForResume is off (Slices 3/4
+   * behavior, unchanged) or because the resume timeout elapsed.
+   */
+  private async escalate(
+    step: CapabilityStep,
+    reasonCode: string,
+  ): Promise<{ resume: true } | { resume: false; result: ExecutionResult }> {
+    const { evidenceDir } = this.opts;
+    const interventionId = randomUUID();
+
+    this.emit('INTERVENTION_REQUESTED', step.stepId, { reason: reasonCode, interventionId });
+    await this.screenshot('needs-human');
+
+    this.state.status = 'SUSPENDED_AWAITING_HUMAN';
+    this.state.lease = { owner: 'NONE', leaseId: null, heldSince: null, ttlMs: this.state.lease.ttlMs };
+    this.persist();
+
+    const cdpEndpoint = this.adapter.wsEndpoint;
+    if (cdpEndpoint) writeSessionHandle(evidenceDir, { sessionId: this.state.runId, cdpEndpoint });
+
+    writeIntervention(evidenceDir, {
+      interventionId,
+      runId: this.state.runId,
+      sessionId: this.state.runId,
+      capabilityId: this.capability.capabilityId,
+      goal: this.capability.description,
+      stepId: step.stepId,
+      reasonCode,
+      explanation: `Replay could not safely proceed at step "${step.stepId}" (${step.intent}): ${reasonCode}.`,
+      screenshotRef: `${evidenceDir}/needs-human.png`,
+      allowedHumanActions: ['view', 'act', 'resume'],
+      createdAt: nowIso(),
+      status: 'open',
+    });
+
+    if (!this.opts.suspendAndWaitForResume) {
+      const result: ExecutionResult = {
+        status: 'needs_human',
+        runId: this.state.runId,
+        interventionId,
+        reasonCode,
+        evidenceRef: evidenceDir,
+      };
+      saveResult(evidenceDir, result);
+      return { resume: false, result };
+    }
+
+    this.emit('CONTROL_TRANSFERRED', step.stepId, { to: 'HUMAN', interventionId });
+    const resolved = await waitForResolution(evidenceDir, this.opts.resumeTimeoutMs ?? 10 * 60_000);
+
+    if (!resolved) {
+      const result = await this.finish(
+        {
+          status: 'failure',
+          code: 'ESCALATION_UNAVAILABLE',
+          stepId: step.stepId,
+          expected: 'a human operator to claim and resolve the intervention',
+          observed: 'no resolution within the escalation timeout',
+          evidenceRef: evidenceDir,
+        },
+        'FAILED',
+      );
+      return { resume: false, result };
+    }
+
+    // Human resolved it. Re-grounding happens in run()'s caller, not here
+    // -- this method only re-establishes ownership and records what the
+    // human did; it never assumes the blocking condition is now cleared.
+    const resolvedIntervention = readIntervention(evidenceDir);
+    this.emit('CONTROL_TRANSFERRED', step.stepId, { to: 'AUTOMATION', interventionId });
+    this.emit('AUTOMATION_RESUMED', step.stepId, { interventionId });
+    this.state.status = 'RUNNING';
+    this.state.lease = { owner: 'AUTOMATION', leaseId: null, heldSince: nowIso(), ttlMs: this.state.lease.ttlMs };
+    if (resolvedIntervention) {
+      this.state.operatorNotes.push({
+        timestamp: nowIso(),
+        operatorId: resolvedIntervention.claimedBy ?? 'unknown-operator',
+        note: resolvedIntervention.resolutionNote ?? '(no note provided)',
+      });
+    }
+    this.persist();
+    return { resume: true };
+  }
+
+  /**
+   * Runs once, immediately after a resume. Never assumes the blocking
+   * condition is now cleared -- it re-derives position by checking
+   * business outcomes and the step's own declared condition against
+   * live page state. A resume that didn't actually fix anything surfaces
+   * as a failure here rather than looping back into a second escalation:
+   * that keeps the control-transfer state machine simple and bounded.
+   *
+   * Deliberately does NOT re-attempt the step's action. For an
+   * interstitial or a postcondition that failed, the human's job during
+   * their control window was to clear the blocking condition on the live
+   * page directly (dismiss the dialog, wait it out, whatever) -- not to
+   * approve automation trying again. For a risky_irreversible
+   * require_human case specifically, re-attempting automatically would
+   * risk double-submitting the exact class of action this mechanism
+   * exists to gate; if it needed doing, the human did it themselves.
+   */
+  private async regroundAfterResume(
+    page: Page,
+    step: CapabilityStep,
+  ): Promise<{ ok: true } | { ok: false; result: ExecutionResult }> {
+    const { evidenceDir } = this.opts;
+
+    const bo = await detectBusinessOutcome(page, this.capability, this.inputs);
+    if (bo) {
+      await this.screenshot('business-outcome');
+      const result = await this.finish(
+        { status: 'business_outcome', code: bo.code, stepId: step.stepId, message: bo.message, outputs: bo.outputs, evidenceRef: evidenceDir },
+        'BUSINESS_OUTCOME',
+      );
+      return { ok: false, result };
+    }
+
+    const condition = step.postcondition ?? step.precondition;
+    if (condition) {
+      // Bounded wait, not a single instant check -- the same reason every
+      // OTHER postcondition in this engine is awaited rather than checked
+      // once. An operator's action can itself trigger a redirect chain or
+      // an iframe reload that is still settling in the instant the resume
+      // signal arrives; re-deriving position deserves the same patience
+      // as the original action did.
+      const held = await waitForCondition(page, condition, this.capability.targetRegistry, this.inputs, 5000);
+      if (!held) {
+        await this.screenshot('failure');
+        const result = await this.finish(
+          {
+            status: 'failure',
+            code: 'POSTCONDITION_UNMET',
+            stepId: step.stepId,
+            expected: "declared condition to hold after the operator's resolution",
+            observed: 're-derived state after resume still does not satisfy it',
+            evidenceRef: evidenceDir,
+          },
+          'FAILED',
+        );
+        return { ok: false, result };
+      }
+      this.emit('POSTCONDITION_PASSED', step.stepId, { afterResume: true });
+    }
+
+    return { ok: true };
+  }
+
   async run(): Promise<ExecutionResult> {
     this.state.status = 'RUNNING';
     this.persist();
@@ -229,7 +403,7 @@ export class ReplayRun {
     const page = this.adapter.getPage();
     const outputs: Record<string, unknown> = {};
 
-    for (; this.state.cursor < this.capability.steps.length; this.state.cursor++) {
+    stepLoop: for (; this.state.cursor < this.capability.steps.length; this.state.cursor++) {
       const step = this.capability.steps[this.state.cursor]!;
       this.persist();
 
@@ -280,21 +454,11 @@ export class ReplayRun {
       }
 
       if (outcome.kind === 'require_human') {
-        const interventionId = randomUUID();
-        this.emit('INTERVENTION_REQUESTED', step.stepId, { reason: outcome.reason, interventionId });
-        await this.screenshot('needs-human');
-        this.state.status = 'SUSPENDED_AWAITING_HUMAN';
-        this.state.lease = { owner: 'NONE', leaseId: null, heldSince: null, ttlMs: this.state.lease.ttlMs };
-        this.persist();
-        const result: ExecutionResult = {
-          status: 'needs_human',
-          runId: this.state.runId,
-          interventionId,
-          reasonCode: outcome.reason,
-          evidenceRef: evidenceDir,
-        };
-        saveResult(evidenceDir, result);
-        return result;
+        const escalation = await this.escalate(step, outcome.reason);
+        if (!escalation.resume) return escalation.result;
+        const grounded = await this.regroundAfterResume(page, step);
+        if (!grounded.ok) return grounded.result;
+        continue stepLoop;
       }
 
       const extractedText = outcome.kind === 'executed' ? outcome.extractedText : undefined;
@@ -334,20 +498,11 @@ export class ReplayRun {
         const recovered = await handleInterstitial(page, interstitial, this.capability, this.inputs, this.adapter, this.policyCtx);
         if (!recovered) {
           if (step.onBlock === 'escalate') {
-            const interventionId = randomUUID();
-            this.emit('INTERVENTION_REQUESTED', step.stepId, { reason: 'INTERSTITIAL_UNHANDLED', interventionId });
-            await this.screenshot('needs-human');
-            this.state.status = 'SUSPENDED_AWAITING_HUMAN';
-            this.persist();
-            const result: ExecutionResult = {
-              status: 'needs_human',
-              runId: this.state.runId,
-              interventionId,
-              reasonCode: 'INTERSTITIAL_UNHANDLED',
-              evidenceRef: evidenceDir,
-            };
-            saveResult(evidenceDir, result);
-            return result;
+            const escalation = await this.escalate(step, 'INTERSTITIAL_UNHANDLED');
+            if (!escalation.resume) return escalation.result;
+            const grounded = await this.regroundAfterResume(page, step);
+            if (!grounded.ok) return grounded.result;
+            continue stepLoop;
           }
           await this.screenshot('failure');
           return this.finish(
@@ -368,14 +523,11 @@ export class ReplayRun {
       if (outcome.kind !== 'executed') {
         const code = failureCodeFor(outcome.kind);
         if (step.onBlock === 'escalate') {
-          const interventionId = randomUUID();
-          this.emit('INTERVENTION_REQUESTED', step.stepId, { reason: code, interventionId });
-          await this.screenshot('needs-human');
-          this.state.status = 'SUSPENDED_AWAITING_HUMAN';
-          this.persist();
-          const result: ExecutionResult = { status: 'needs_human', runId: this.state.runId, interventionId, reasonCode: code, evidenceRef: evidenceDir };
-          saveResult(evidenceDir, result);
-          return result;
+          const escalation = await this.escalate(step, code);
+          if (!escalation.resume) return escalation.result;
+          const grounded = await this.regroundAfterResume(page, step);
+          if (!grounded.ok) return grounded.result;
+          continue stepLoop;
         }
         await this.screenshot('failure');
         return this.finish(
@@ -396,14 +548,11 @@ export class ReplayRun {
             );
           }
           if (step.onBlock === 'escalate') {
-            const interventionId = randomUUID();
-            this.emit('INTERVENTION_REQUESTED', step.stepId, { reason: 'POSTCONDITION_UNMET', interventionId });
-            await this.screenshot('needs-human');
-            this.state.status = 'SUSPENDED_AWAITING_HUMAN';
-            this.persist();
-            const result: ExecutionResult = { status: 'needs_human', runId: this.state.runId, interventionId, reasonCode: 'POSTCONDITION_UNMET', evidenceRef: evidenceDir };
-            saveResult(evidenceDir, result);
-            return result;
+            const escalation = await this.escalate(step, 'POSTCONDITION_UNMET');
+            if (!escalation.resume) return escalation.result;
+            const grounded = await this.regroundAfterResume(page, step);
+            if (!grounded.ok) return grounded.result;
+            continue stepLoop;
           }
           await this.screenshot('failure');
           return this.finish(

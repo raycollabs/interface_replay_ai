@@ -1,0 +1,29 @@
+{
+  "runId": "67fd4990-02c7-406f-8fd4-06e6e006015a",
+  "capabilityId": "member.read-savings-balance",
+  "capabilityVersion": 1,
+  "inputs": {
+    "memberId": "[REDACTED]"
+  },
+  "cursor": 7,
+  "status": "SUCCEEDED",
+  "mode": "UNATTENDED",
+  "lease": {
+    "owner": "NONE",
+    "leaseId": null,
+    "heldSince": null,
+    "ttlMs": 300000
+  },
+  "resolvedFrom": [
+    "local-legacy-bank-demo/member.read-savings-balance@1"
+  ],
+  "operatorNotes": [
+    {
+      "timestamp": "2026-09-12T14:55:56.886Z",
+      "operatorId": "operator-1",
+      "note": "Verified this was a routine compliance flag, cleared for this account."
+    }
+  ],
+  "createdAt": "2026-09-12T14:55:52.079Z",
+  "updatedAt": "2026-09-12T14:55:57.025Z"
+}

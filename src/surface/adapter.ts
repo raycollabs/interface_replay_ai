@@ -1,4 +1,4 @@
-import { chromium, type Browser, type BrowserServer, type BrowserContext, type Page } from 'playwright';
+import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
 import type { CapabilityDefinition, CapabilityStep } from '../contracts/index.js';
 import { evaluatePolicy, type PolicyContext } from '../policy/allowlist.js';
 import { resolveTarget } from './resolveTarget.js';
@@ -23,19 +23,30 @@ function resolveValue(step: CapabilityStep, inputs: Record<string, unknown>): st
 }
 
 /**
- * The out-of-process browser is launched via launchServer()+connect() from
- * this first adapter commit, not retrofitted later: a second client (an
- * operator console, in Slice 5) can attach to the same wsEndpoint and
- * drive the identical live session without anything here changing. Built
- * now because the alternative -- an in-process `chromium.launch()` -- has
- * no seam for a second client to attach to, and adding one after replay
- * code already assumes a single owner would be a rewrite, not an addition.
+ * The out-of-process browser is launched with a real CDP endpoint exposed
+ * from this first adapter commit, not retrofitted later: a second,
+ * genuinely independent client (the operator console, Slice 5) attaches
+ * to the identical live session via `chromium.connectOverCDP()` without
+ * anything here changing.
+ *
+ * This deliberately does NOT use Playwright's own `launchServer()` +
+ * `connect()` pair, despite that looking like the obvious "multi-client"
+ * primitive. It isn't one: verified directly (see the Slice 5 commit
+ * message) that a second `connect()` call to a `launchServer()` browser
+ * gets an isolated view with zero contexts -- that pairing is for
+ * sequential reuse across test runs, not concurrent multi-client access.
+ * CDP is the actual mechanism DevTools-style tooling uses for that, and
+ * it's what's used here: a fixed local debug port, queried via
+ * `/json/version` for the real `webSocketDebuggerUrl`, given to any
+ * second client that needs to see the same contexts and pages.
  */
+const CDP_PORT = 9333; // fixed for this single-run demo; a real deployment would allocate dynamically
+
 export class PlaywrightSurfaceAdapter {
-  private server: BrowserServer | null = null;
   private browser: Browser | null = null;
   private context: BrowserContext | null = null;
   private page: Page | null = null;
+  private cdpEndpoint: string | null = null;
 
   constructor(
     private readonly baseUrl: string,
@@ -43,7 +54,7 @@ export class PlaywrightSurfaceAdapter {
   ) {}
 
   get wsEndpoint(): string | null {
-    return this.server?.wsEndpoint() ?? null;
+    return this.cdpEndpoint;
   }
 
   getPage(): Page {
@@ -52,16 +63,21 @@ export class PlaywrightSurfaceAdapter {
   }
 
   async launch(): Promise<void> {
-    this.server = await chromium.launchServer({ headless: this.options.headless ?? true });
-    this.browser = await chromium.connect(this.server.wsEndpoint());
+    this.browser = await chromium.launch({
+      headless: this.options.headless ?? true,
+      args: [`--remote-debugging-port=${CDP_PORT}`],
+    });
     this.context = await this.browser.newContext();
     this.page = await this.context.newPage();
+
+    const res = await fetch(`http://127.0.0.1:${CDP_PORT}/json/version`);
+    const info = (await res.json()) as { webSocketDebuggerUrl: string };
+    this.cdpEndpoint = info.webSocketDebuggerUrl;
   }
 
   async close(): Promise<void> {
     await this.context?.close().catch(() => {});
     await this.browser?.close().catch(() => {});
-    await this.server?.close().catch(() => {});
   }
 
   private currentRoute(): string {

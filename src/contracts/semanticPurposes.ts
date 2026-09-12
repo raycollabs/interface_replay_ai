@@ -46,6 +46,7 @@ export const SEMANTIC_PURPOSES = [
   'unknown dialog dismiss',
   'app error banner',
   'account data loading banner',
+  'unresolvable notice acknowledgment',
 ] as const;
 
 export type SemanticPurpose = (typeof SEMANTIC_PURPOSES)[number];

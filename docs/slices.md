@@ -137,15 +137,58 @@ prove the mechanism).
   grep across all five evidence directories for all four member IDs used
   so far — no leaks.
 
-- [ ] **Slice 5 — Session broker + handoff.** Lease state machine with
-  `NONE` as a real transitional owner state, TTL + heartbeat,
-  `InterventionRequest`, minimal HTML operator page, CDP handback to the
-  *same* browser context, tracing across the transfer, re-grounding on
-  resume (re-derive position from preconditions/postconditions, never
-  assume it), required operator note. Gate: the unknown-dialog case
-  suspends the run, an operator claims it, dismisses the dialog in the
-  same session, resumes, automation re-grounds and completes. Ownership
-  log shows `AUTOMATION -> NONE -> HUMAN -> NONE -> AUTOMATION`.
+- [x] **Slice 5 — Session broker + handoff.** A third member fixture,
+  `33333`, is the genuinely-stuck case: visually similar to 44444's
+  auto-dismissable notice, but its interstitial is declared
+  `handle: 'escalate'` — the engine never attempts to clear it itself.
+  `ReplayRun.escalate()` is the single escalation path all three
+  "can't safely proceed" sites in the engine call (previously three
+  copies of the same suspend/notify logic): AUTOMATION -> NONE (release)
+  -> HUMAN (operator claims) -> NONE (operator resumes) -> AUTOMATION
+  (worker re-claims). `src/session/broker.ts` persists the
+  `InterventionRequest` and a `SessionHandle` (the live connection info) to
+  the run's own evidence directory — the seam both processes agree on
+  without needing a shared registry for this single-run demo.
+
+  Two real problems surfaced and fixed while making this genuinely work,
+  not simplified around:
+
+  1. **`launchServer()` + `connect()` does not do what it looks like it
+     does.** Verified directly with a throwaway script: a second
+     `chromium.connect(wsEndpoint)` call to a `launchServer()` browser
+     gets an isolated view with zero contexts, even though the first
+     client's context demonstrably still exists. That pairing is for
+     *sequential* reuse (one test disconnects, the next connects fresh),
+     not concurrent multi-client access — the opposite of what a same-
+     session handoff needs. Switched the adapter to `chromium.launch()`
+     with a real `--remote-debugging-port` exposed, and both the worker
+     and the operator console attach via `chromium.connectOverCDP()` —
+     verified this actually shares contexts/pages across simultaneous
+     independent clients before building anything else on top of it.
+  2. **Re-grounding checked the postcondition exactly once.** The
+     operator's click demonstrably worked (confirmed by reading the
+     `operator-after-action.png` evidence directly), but the worker's
+     first re-grounding attempt still reported the postcondition unmet —
+     an operator action can itself trigger a redirect chain / iframe
+     reload still settling in the instant resume fires. Fixed by
+     re-deriving position with the same bounded `waitForCondition` every
+     other postcondition in the engine already uses, instead of a single
+     instant `checkCondition`. Re-grounding deserves the same patience as
+     the original action.
+
+  Gate: `evidence/replay-handoff/` — worker suspends on member 33333's
+  unresolvable notice, a genuinely separate operator-console process
+  (`npm run operator`) attaches via CDP to the identical live browser,
+  claims the intervention, clicks the real "Acknowledge and escalate"
+  control (screenshotted before/after as evidence), resumes with a note,
+  and the worker re-grounds and completes: `status: success`, correct
+  member-specific outputs. `events.jsonl` shows the full
+  `INTERVENTION_REQUESTED -> CONTROL_TRANSFERRED(HUMAN) -> HUMAN_ACTION
+  (click) -> HUMAN_ACTION (resume) -> CONTROL_TRANSFERRED(AUTOMATION) ->
+  AUTOMATION_RESUMED -> RUN_COMPLETED` sequence with real timestamps; the
+  operator's note lands in `run-state.json`'s `operatorNotes`. Redaction
+  re-verified: no raw `33333` anywhere in the evidence directory.
+
   `REPORT.md` drafted from this point on, not written cold at the end.
 
 - [ ] **Slice 6 — Discovery loop.** `observe()`'s set-of-marks grounding
