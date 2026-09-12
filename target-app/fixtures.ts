@@ -5,10 +5,13 @@
  * Slice 4 without touching this happy-path fixture.
  */
 export interface MemberAccount {
-  accountType: 'Savings';
+  accountType: 'Savings' | 'Checking';
   accountId: string;
   balance: string;
   currency: string;
+  /** Only set on accounts created through the sub-account creation flow
+   *  (3.4 gap closure) -- the original fixture accounts have none. */
+  nickname?: string;
 }
 
 export interface Member {
@@ -85,6 +88,16 @@ export const MEMBERS: Record<string, Member> = {
   '22222': {
     memberId: '22222',
     name: 'Session Timeout Test Holder',
+    accounts: [],
+  },
+  // 3.4 gap closure: a dedicated member for the sub-account create/close
+  // demo, starting with zero accounts -- kept separate from every other
+  // fixture member so mutating it (creating, then closing, a sub-account)
+  // can never affect any other capability's regression-checked state
+  // (e.g. 12345's exact balance/accountId).
+  '56789': {
+    memberId: '56789',
+    name: 'Sub-Account Demo Holder',
     accounts: [],
   },
 };

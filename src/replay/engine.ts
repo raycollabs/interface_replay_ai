@@ -236,6 +236,7 @@ export class ReplayRun {
       this.capability,
       this.capability.targetRegistry,
       `${this.opts.evidenceDir}/${label}.png`,
+      this.redactValues,
     ).catch(() => {});
   }
 

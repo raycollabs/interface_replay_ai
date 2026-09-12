@@ -1,0 +1,18 @@
+{
+  "interventionId": "74613a2b-bdb1-4626-aa9b-4dd209caf90c",
+  "runId": "03fa4687-387f-4f09-af4b-549cec7932c7",
+  "sessionId": "03fa4687-387f-4f09-af4b-549cec7932c7",
+  "capabilityId": "member.close-sub-account",
+  "goal": "Permanently closes a member's sub-account -- a genuine point of no return. 3.4 gap closure: the first risky_irreversible step actually exercised end to end, not just unit-tested against evaluatePolicy() in isolation. The policy layer forces an explicit human decision on this step regardless of execution mode; this capability has no automatic path through it by design.",
+  "stepId": "confirm-close",
+  "reasonCode": "risky_irreversible actions always require an explicit, in-the-moment human decision.",
+  "explanation": "Replay could not safely proceed at step \"confirm-close\" (Permanently close the account -- the flow's point of no return): risky_irreversible actions always require an explicit, in-the-moment human decision..",
+  "screenshotRef": "evidence/replay-close-subaccount-attended/needs-human.png",
+  "allowedHumanActions": [
+    "view",
+    "act",
+    "resume"
+  ],
+  "createdAt": "2026-09-12T19:32:41.151Z",
+  "status": "open"
+}

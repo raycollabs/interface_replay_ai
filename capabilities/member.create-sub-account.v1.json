@@ -1,0 +1,305 @@
+{
+  "schemaVersion": "1.0.0",
+  "capabilityId": "member.create-sub-account",
+  "version": 1,
+  "status": "draft",
+  "name": "Create a member sub-account",
+  "description": "Opens a new sub-account (Savings or Checking) for a member. A real mutation, but reversible -- the new account can be closed via member.close-sub-account. 3.4 gap closure: the first mutating_reversible step actually exercised end to end, not just unit-tested against evaluatePolicy() in isolation.",
+  "product": {
+    "vendor": "local-legacy-bank-demo",
+    "app": "member-servicing-console",
+    "versionRange": "1.x"
+  },
+  "executionModes": ["ATTENDED", "UNATTENDED"],
+  "scope": {
+    "allowedOrigins": ["http://localhost:4173"],
+    "allowedRoutes": ["/login", "/member-search", "/member/*", "/member/*/accounts", "/member/*/accounts/new"],
+    "allowedActionTypes": ["navigate", "click", "type", "select", "extract"]
+  },
+  "inputs": {
+    "memberId": {
+      "type": "string",
+      "required": true,
+      "sensitive": true,
+      "pattern": "^[0-9]{5}$",
+      "example": "56789"
+    },
+    "nickname": {
+      "type": "string",
+      "required": true,
+      "sensitive": false,
+      "example": "Emergency Fund"
+    }
+  },
+  "outputs": {
+    "newAccountId": {
+      "shape": { "type": "string" },
+      "description": "The identifier assigned to the newly created sub-account.",
+      "sourceStepId": "extract-new-account-id"
+    }
+  },
+
+  "targetRegistry": {
+    "member identifier input": {
+      "semanticPurpose": "member identifier input",
+      "framePath": [],
+      "recordedRung": 3,
+      "candidates": [
+        {
+          "strategy": { "type": "role_and_name", "role": "textbox", "name": "Member ID", "exact": true },
+          "rationale": "Preferred if the field ever gains a proper accessible name.",
+          "confidence": "medium"
+        },
+        {
+          "strategy": { "type": "associated_label", "label": "Member ID" },
+          "rationale": "Actual markup: legacy table-form label with no for/aria association. Same field as member.read-savings-balance's target -- resolves the same way.",
+          "confidence": "high"
+        }
+      ]
+    },
+    "member search submit": {
+      "semanticPurpose": "member search submit",
+      "framePath": [],
+      "recordedRung": 2,
+      "candidates": [
+        {
+          "strategy": { "type": "role_and_name", "role": "button", "name": "Search", "exact": true },
+          "rationale": "Single named submit control on the search form.",
+          "confidence": "high"
+        }
+      ]
+    },
+    "member not found banner": {
+      "semanticPurpose": "member not found banner",
+      "framePath": [],
+      "recordedRung": 2,
+      "candidates": [
+        {
+          "strategy": { "type": "role_and_name", "role": "alert", "name": "Member not found", "exact": true },
+          "rationale": "Rendered with an explicit aria-label (see the 3.3 gap-closure note in docs/slices.md on why role=alert cannot be matched by content substring).",
+          "confidence": "high"
+        }
+      ]
+    },
+    "accounts navigation": {
+      "semanticPurpose": "accounts navigation",
+      "framePath": [],
+      "recordedRung": 2,
+      "candidates": [
+        {
+          "strategy": { "type": "role_and_name", "role": "link", "name": "Accounts", "exact": true },
+          "rationale": "Plain <a> link; accessible name comes directly from link text.",
+          "confidence": "high"
+        }
+      ]
+    },
+    "sub-account create action": {
+      "semanticPurpose": "sub-account create action",
+      "framePath": [],
+      "recordedRung": 2,
+      "candidates": [
+        {
+          "strategy": { "type": "role_and_name", "role": "link", "name": "Open a new sub-account", "exact": true },
+          "rationale": "The accounts page's own entry point into this flow -- always present regardless of whether the member has any accounts yet, which is what makes it a reliable postcondition for 'landed on the accounts page' too.",
+          "confidence": "high"
+        }
+      ]
+    },
+    "sub-account type select": {
+      "semanticPurpose": "sub-account type select",
+      "framePath": [],
+      "recordedRung": 3,
+      "candidates": [
+        {
+          "strategy": { "type": "role_and_name", "role": "combobox", "name": "Account Type", "exact": true },
+          "rationale": "Preferred if the <select> ever gains a proper accessible name.",
+          "confidence": "medium"
+        },
+        {
+          "strategy": { "type": "associated_label", "label": "Account Type" },
+          "rationale": "Actual markup: same legacy table-form pattern as every other field in this app -- resolved via the table-cell-adjacency heuristic.",
+          "confidence": "high"
+        }
+      ]
+    },
+    "sub-account nickname input": {
+      "semanticPurpose": "sub-account nickname input",
+      "framePath": [],
+      "recordedRung": 3,
+      "candidates": [
+        {
+          "strategy": { "type": "role_and_name", "role": "textbox", "name": "Nickname", "exact": true },
+          "rationale": "Preferred if the field ever gains a proper accessible name.",
+          "confidence": "medium"
+        },
+        {
+          "strategy": { "type": "associated_label", "label": "Nickname" },
+          "rationale": "Actual markup: legacy table-form label with no for/aria association.",
+          "confidence": "high"
+        }
+      ]
+    },
+    "sub-account confirm submit": {
+      "semanticPurpose": "sub-account confirm submit",
+      "framePath": [],
+      "recordedRung": 2,
+      "candidates": [
+        {
+          "strategy": { "type": "role_and_name", "role": "button", "name": "Create", "exact": true },
+          "rationale": "The form's own submit button -- this is the step that actually mutates state, distinct from 'sub-account create action' which only navigates to this form.",
+          "confidence": "high"
+        }
+      ]
+    },
+    "confirmation screen marker": {
+      "semanticPurpose": "confirmation screen marker",
+      "framePath": [],
+      "recordedRung": 2,
+      "candidates": [
+        {
+          "strategy": { "type": "role_and_name", "role": "status", "name": "Sub-account created", "exact": true },
+          "rationale": "Rendered with an explicit aria-label, same reasoning as the error banners fixed in the 3.3 gap closure -- role=status does not derive its accessible name from content either.",
+          "confidence": "high"
+        }
+      ]
+    },
+    "account identifier field": {
+      "semanticPurpose": "account identifier field",
+      "framePath": [],
+      "recordedRung": 6,
+      "candidates": [
+        {
+          "strategy": { "type": "text_anchor", "anchorText": "Account ID:", "relationship": "next-sibling" },
+          "rationale": "The confirmation page is plain prose, not a table -- 'account identifier field' is the same semantic purpose member.read-savings-balance uses for a table cell, reused here for a differently-shaped page. Each capability owns its own concrete binding for a shared purpose name.",
+          "confidence": "medium"
+        }
+      ]
+    }
+  },
+
+  "knownOutcomes": [
+    {
+      "code": "MEMBER_NOT_FOUND",
+      "description": "No member matched the supplied identifier. A legitimate result, not a failure.",
+      "detect": { "type": "controlVisible", "semanticPurpose": "member not found banner" },
+      "mapsToOutputs": {}
+    }
+  ],
+  "interstitials": [],
+  "steps": [
+    {
+      "stepId": "navigate-search",
+      "intent": "Open the member search screen",
+      "action": "navigate",
+      "value": { "literal": "/member-search" },
+      "postcondition": { "type": "controlVisible", "semanticPurpose": "member identifier input" },
+      "riskClass": "read_only",
+      "onBlock": "escalate",
+      "timeoutMs": 8000
+    },
+    {
+      "stepId": "enter-member-id",
+      "intent": "Enter the member identifier to search for",
+      "action": "type",
+      "targetPurpose": "member identifier input",
+      "value": { "paramRef": "memberId" },
+      "postcondition": { "type": "controlHasValue", "semanticPurpose": "member identifier input", "equals": "{{inputs.memberId}}" },
+      "riskClass": "read_only",
+      "onBlock": "escalate",
+      "timeoutMs": 5000
+    },
+    {
+      "stepId": "submit-search",
+      "intent": "Submit the member search",
+      "action": "click",
+      "targetPurpose": "member search submit",
+      "postcondition": {
+        "type": "any",
+        "conditions": [
+          { "type": "controlVisible", "semanticPurpose": "accounts navigation" },
+          { "type": "controlVisible", "semanticPurpose": "member not found banner" }
+        ]
+      },
+      "riskClass": "read_only",
+      "onBlock": "escalate",
+      "timeoutMs": 10000
+    },
+    {
+      "stepId": "open-accounts",
+      "intent": "Open the member's accounts tab",
+      "action": "click",
+      "targetPurpose": "accounts navigation",
+      "postcondition": { "type": "controlVisible", "semanticPurpose": "sub-account create action" },
+      "riskClass": "read_only",
+      "onBlock": "escalate",
+      "timeoutMs": 8000
+    },
+    {
+      "stepId": "navigate-new-account",
+      "intent": "Open the new sub-account form",
+      "action": "click",
+      "targetPurpose": "sub-account create action",
+      "postcondition": { "type": "controlVisible", "semanticPurpose": "sub-account type select" },
+      "riskClass": "read_only",
+      "onBlock": "escalate",
+      "timeoutMs": 8000
+    },
+    {
+      "stepId": "select-account-type",
+      "intent": "Choose the Savings sub-account type",
+      "action": "select",
+      "targetPurpose": "sub-account type select",
+      "value": { "literal": "Savings" },
+      "postcondition": { "type": "controlHasValue", "semanticPurpose": "sub-account type select", "equals": "Savings" },
+      "riskClass": "read_only",
+      "onBlock": "escalate",
+      "timeoutMs": 5000
+    },
+    {
+      "stepId": "enter-nickname",
+      "intent": "Enter a nickname for the new sub-account",
+      "action": "type",
+      "targetPurpose": "sub-account nickname input",
+      "value": { "paramRef": "nickname" },
+      "postcondition": { "type": "controlHasValue", "semanticPurpose": "sub-account nickname input", "equals": "{{inputs.nickname}}" },
+      "riskClass": "read_only",
+      "onBlock": "escalate",
+      "timeoutMs": 5000
+    },
+    {
+      "stepId": "submit-create",
+      "intent": "Create the sub-account -- the flow's actual point of mutation",
+      "action": "click",
+      "targetPurpose": "sub-account confirm submit",
+      "postcondition": { "type": "controlVisible", "semanticPurpose": "confirmation screen marker" },
+      "riskClass": "mutating_reversible",
+      "onBlock": "escalate",
+      "timeoutMs": 8000
+    },
+    {
+      "stepId": "extract-new-account-id",
+      "intent": "Read the newly created account's identifier",
+      "action": "extract",
+      "targetPurpose": "account identifier field",
+      "riskClass": "read_only",
+      "onBlock": "escalate",
+      "timeoutMs": 5000
+    }
+  ],
+  "checkpoint": {
+    "type": "all",
+    "conditions": [
+      { "type": "controlVisible", "semanticPurpose": "confirmation screen marker" },
+      { "type": "controlVisible", "semanticPurpose": "account identifier field" }
+    ]
+  },
+  "assistedRepair": {
+    "enabled": false,
+    "maxSteps": 1,
+    "requiresTenantPolicy": true
+  },
+  "provenance": {
+    "recordedAt": "2026-09-12T00:00:00.000Z",
+    "adapter": "playwright-web-adapter@0.1.0"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "status": "needs_human",
+  "runId": "e6a35862-3a59-47f8-adc9-843eeed65f34",
+  "interventionId": "017a293a-5390-48d2-9377-ef2bbdb6e5a2",
+  "reasonCode": "Risk class \"mutating_reversible\" exceeds the unattended ceiling \"safe_reversible\".",
+  "evidenceRef": "evidence/replay-create-subaccount-unattended"
+}

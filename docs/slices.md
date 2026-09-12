@@ -60,6 +60,65 @@ prove the mechanism).
   controls for a model to choose from. Moved into Slice 6, where it's
   actually needed, rather than building it ahead of any consumer.
 
+  **Two gaps closed on review**, requirement 3.4 ("distinguish safe/
+  reversible from risky/irreversible... handle the risky class
+  conservatively"; "never persist secrets or raw sensitive data... into
+  artifacts or logs"):
+
+  1. **`mutating_reversible`/`risky_irreversible` had a real design but
+     zero live exercise.** Every capability artifact in the repo declared
+     every step `read_only`; the two higher risk classes were only ever
+     reached by calling `evaluatePolicy()` directly with a synthetic
+     `ProposedAction` in a unit test — the exact "declared but never
+     exercised" pattern already found and closed twice this session
+     (3.2's array-shape cut, 3.3's dead failure codes). The whole
+     "sub-account creation" semantic-purpose group was scaffolded in
+     `semanticPurposes.ts` for exactly this and never used by anything.
+     Closed with two new, real, hand-authored capabilities:
+     `member.create-sub-account` (`mutating_reversible` — opens a real
+     account) and `member.close-sub-account` (`risky_irreversible` — a
+     genuine, permanent deletion; the first real use of `commitBoundary`
+     and its `idempotencyProbe` field too). Live-verified: `create` under
+     `UNATTENDED` mode correctly stops with `needs_human` ("Risk class
+     'mutating_reversible' exceeds the unattended ceiling
+     'safe_reversible'"); the identical capability under `--mode ATTENDED`
+     runs to completion and genuinely creates account `SAV-90000`. `close`
+     stops with `needs_human` in *both* modes, word-for-word the same
+     reason ("risky_irreversible actions always require an explicit,
+     in-the-moment human decision") — proving the mode-independence a bug
+     fix earlier in this project specifically guarantees, now shown
+     against a real capability rather than only a unit test. Then carried
+     through a full resume cycle on the real operator console: `POST
+     /act` clicked the actual "Confirm Close" button on the live
+     suspended session (the same account just created), `POST /resume`
+     handed control back with an operator note, and the worker
+     re-grounded to `status: success` — `SAV-90000` genuinely deleted,
+     the full `AUTOMATION → HUMAN → AUTOMATION` event trail intact,
+     `operatorNotes` populated. Not simulated at any point.
+  2. **A live redaction leak, found by pulling an actual screenshot
+     rather than trusting the design doc's claim.** The existing
+     `<input>`-masking mechanism in `captureEvidenceScreenshot()` only
+     covers a sensitive value that was *typed* somewhere; it does nothing
+     for a value the app itself echoes back as plain rendered text.
+     Opening `evidence/replay-business-outcome/business-outcome.png`
+     showed the raw `memberId` ("99999") sitting unredacted in a "no
+     member found" banner. Fixed with a DOM text-node sweep
+     (`redactSensitiveTextAcrossFrames` in `src/surface/evidence.ts`):
+     immediately before every evidence screenshot, every frame's text
+     nodes are scanned for the run's actual sensitive input values and
+     swapped for `[REDACTED]` in place, then restored right after — same
+     at-capture-not-at-write discipline as the `<input>` masking, just
+     extended past elements to content. Re-verified live: the
+     regenerated screenshot now reads "No member found for identifier
+     [REDACTED]."; the happy-path screenshot (no sensitive text on that
+     page at all) is byte-for-byte unaffected, confirming the fix is
+     precise, not a blanket blur.
+
+  Full regression re-run after both changes: every pre-existing member
+  scenario (12345, 44444, 55555, 33333, 88888, 22222, 00000, 99999)
+  replayed live and unchanged. 72/72 unit tests green. Redaction
+  re-verified clean by grep across every evidence directory, old and new.
+
 - [x] **Slice 3 — Replay engine + run state. The walking skeleton.** The
   hardcoded array becomes artifact-driven (`ReplayRun` in
   `src/replay/engine.ts`). Step loop, precondition/postcondition waits (no

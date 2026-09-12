@@ -1,0 +1,7 @@
+{
+  "status": "needs_human",
+  "runId": "3424e1d0-285a-403d-be1a-3ed23fada25f",
+  "interventionId": "305d475f-5003-4476-b2c6-e695dd528169",
+  "reasonCode": "risky_irreversible actions always require an explicit, in-the-moment human decision.",
+  "evidenceRef": "evidence/replay-close-subaccount-unattended"
+}

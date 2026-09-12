@@ -33,12 +33,17 @@ export const SEMANTIC_PURPOSES = [
   'account currency field',
   'account identifier field',
 
-  // Sub-account creation flow
+  // Sub-account creation flow (mutating_reversible -- 3.4 gap closure)
   'sub-account create action',
   'sub-account type select',
   'sub-account nickname input',
   'sub-account confirm submit',
   'confirmation screen marker',
+
+  // Sub-account closure flow (risky_irreversible -- 3.4 gap closure)
+  'sub-account close action',
+  'sub-account close confirm',
+  'account closed marker',
 
   // Cross-cutting error / dialog surfaces
   'permission denied banner',

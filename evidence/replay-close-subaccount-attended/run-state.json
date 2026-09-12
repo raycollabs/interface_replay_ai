@@ -1,0 +1,23 @@
+{
+  "runId": "03fa4687-387f-4f09-af4b-549cec7932c7",
+  "capabilityId": "member.close-sub-account",
+  "capabilityVersion": 1,
+  "inputs": {
+    "memberId": "[REDACTED]"
+  },
+  "cursor": 5,
+  "status": "SUSPENDED_AWAITING_HUMAN",
+  "mode": "ATTENDED",
+  "lease": {
+    "owner": "NONE",
+    "leaseId": null,
+    "heldSince": null,
+    "ttlMs": 300000
+  },
+  "resolvedFrom": [
+    "local-legacy-bank-demo/member.close-sub-account@1"
+  ],
+  "operatorNotes": [],
+  "createdAt": "2026-09-12T19:32:40.823Z",
+  "updatedAt": "2026-09-12T19:32:41.150Z"
+}

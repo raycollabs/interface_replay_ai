@@ -129,13 +129,110 @@ export function memberDetailPage(memberId: string, name: string): string {
   );
 }
 
-export function accountsPage(memberId: string): string {
+/**
+ * `manageableAccounts`, when present, adds a top-level (non-iframe) list
+ * with a "Close" action per account, plus an "Open a new sub-account"
+ * link -- 3.4 gap closure. Deliberately kept OUTSIDE the accounts-frame
+ * iframe used by the read-balance flow: that iframe exists specifically
+ * to exercise frame-traversal targeting (Slice 2), a different concern
+ * from risk-class handling. Optional so the read-savings-balance
+ * capability's existing targets/evidence are byte-for-byte unaffected.
+ */
+export function accountsPage(memberId: string, manageableAccounts?: { accountId: string; accountType: string; nickname?: string }[]): string {
+  const manageSection = manageableAccounts
+    ? `
+    <p><a href="/member/${memberId}/accounts/new">Open a new sub-account</a></p>
+    <ul>
+      ${manageableAccounts
+        .map(
+          (a) =>
+            `<li>${a.accountType} ${a.accountId}${a.nickname ? ` ("${a.nickname}")` : ''} — <a href="/member/${memberId}/accounts/${a.accountId}/close">Close</a></li>`,
+        )
+        .join('\n')}
+    </ul>`
+    : '';
   return pageShell(
     `Accounts — Member ${memberId}`,
     `
     <p><a href="/member/${memberId}">Back to member</a></p>
     <iframe name="accounts-frame" title="Accounts" src="/member/${memberId}/accounts-frame"
       style="width:100%;height:220px;border:1px solid #999;"></iframe>
+    ${manageSection}
+  `,
+  );
+}
+
+/**
+ * The sub-account creation form (3.4 gap closure -- mutating_reversible).
+ * Type select and nickname input are the two fields; the submit button is
+ * the flow's actual point of mutation, distinct from the link that
+ * navigated here ('sub-account create action' vs 'sub-account confirm
+ * submit' -- two different semantic purposes for "start the flow" vs
+ * "commit the flow").
+ */
+export function newSubAccountFormPage(memberId: string): string {
+  return pageShell(
+    'Open a New Sub-Account',
+    `
+    <form method="post" action="/member/${memberId}/accounts/new">
+      <table class="form">
+        <tr><td>Account Type</td><td>
+          <select name="accountType">
+            <option value="Savings">Savings</option>
+            <option value="Checking">Checking</option>
+          </select>
+        </td></tr>
+        <tr><td>Nickname</td><td><input type="text" name="nickname" /></td></tr>
+        <tr><td></td><td><button type="submit">Create</button></td></tr>
+      </table>
+    </form>
+    <p><a href="/member/${memberId}/accounts">Cancel</a></p>
+  `,
+  );
+}
+
+export function subAccountConfirmationPage(memberId: string, account: { accountId: string; accountType: string; nickname?: string }): string {
+  return pageShell(
+    'Sub-Account Created',
+    `
+    <div role="status" class="banner-info" aria-label="Sub-account created">Sub-account created successfully.</div>
+    <p>Account Type: ${account.accountType}</p>
+    <p>Account ID:</p>
+    <p>${account.accountId}</p>
+    ${account.nickname ? `<p>Nickname: ${account.nickname}</p>` : ''}
+    <p><a href="/member/${memberId}/accounts">Back to accounts</a></p>
+  `,
+  );
+}
+
+/**
+ * The risky_irreversible confirmation gate (3.4 gap closure). Explicitly
+ * warns that this cannot be undone -- the human-facing equivalent of what
+ * the policy layer already enforces mechanically (risky_irreversible
+ * always requires an explicit, in-the-moment decision, attended or not).
+ */
+export function closeAccountConfirmPage(memberId: string, account: { accountId: string; accountType: string; nickname?: string }): string {
+  return pageShell(
+    'Close Account',
+    `
+    <div class="banner-error" role="alert" aria-label="Irreversible action warning">
+      This will permanently close ${account.accountType} account ${account.accountId}${account.nickname ? ` ("${account.nickname}")` : ''}.
+      This cannot be undone.
+    </div>
+    <form method="post" action="/member/${memberId}/accounts/${account.accountId}/close">
+      <button type="submit">Confirm Close</button>
+    </form>
+    <p><a href="/member/${memberId}/accounts">Cancel</a></p>
+  `,
+  );
+}
+
+export function accountClosedPage(memberId: string, accountId: string): string {
+  return pageShell(
+    'Account Closed',
+    `
+    <div role="status" class="banner-info" aria-label="Account closed">Account ${accountId} has been closed.</div>
+    <p><a href="/member/${memberId}/accounts">Back to accounts</a></p>
   `,
   );
 }

@@ -1,5 +1,5 @@
 {
-  "runId": "fce46b84-434f-4363-85ba-3433fa2803f1",
+  "runId": "994fb8e7-ec5f-4f6f-9144-503e9c3dbe13",
   "capabilityId": "member.read-savings-balance",
   "capabilityVersion": 1,
   "inputs": {
@@ -18,6 +18,6 @@
     "local-legacy-bank-demo/member.read-savings-balance@1"
   ],
   "operatorNotes": [],
-  "createdAt": "2026-09-12T19:06:05.429Z",
-  "updatedAt": "2026-09-12T19:06:05.649Z"
+  "createdAt": "2026-09-12T19:43:18.458Z",
+  "updatedAt": "2026-09-12T19:43:18.681Z"
 }

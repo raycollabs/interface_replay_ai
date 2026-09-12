@@ -289,6 +289,62 @@ optional note) hands control back. Terminal 1 then re-grounds and
 completes on its own. `evidence/replay-handoff/events.jsonl` records the
 full `AUTOMATION -> HUMAN -> AUTOMATION` transfer with real timestamps.
 
+## Risk-class handling demo (mutating_reversible / risky_irreversible)
+
+`member.read-savings-balance` is entirely `read_only`. These two
+capabilities exercise the other two risk classes end to end -- not just
+via `evaluatePolicy()` unit tests -- against a dedicated demo member
+(`56789`, starts with zero accounts so mutating it can never affect any
+other capability's regression-checked fixture data).
+
+```bash
+# mutating_reversible: blocked by the default unattended ceiling...
+npm run replay -- --capability member.create-sub-account --version 1 \
+  --input memberId=56789 --input nickname="Emergency Fund" \
+  --evidence-dir evidence/replay-create-subaccount-unattended
+# -> needs_human: "Risk class 'mutating_reversible' exceeds the
+#    unattended ceiling 'safe_reversible'."
+
+# ...but auto-allowed once a human is attending (can intervene, doesn't
+# need to pre-approve this specific action):
+npm run replay -- --capability member.create-sub-account --version 1 \
+  --mode ATTENDED --input memberId=56789 --input nickname="Emergency Fund" \
+  --evidence-dir evidence/replay-create-subaccount-attended
+# -> status: success, outputs: { newAccountId: "SAV-90000" } -- a real account
+
+# risky_irreversible: blocked in BOTH modes, identically --
+# "attended" means a human CAN intervene, not that this was pre-approved.
+npm run replay -- --capability member.close-sub-account --version 1 \
+  --input memberId=56789 --evidence-dir evidence/replay-close-subaccount-unattended
+npm run replay -- --capability member.close-sub-account --version 1 \
+  --mode ATTENDED --input memberId=56789 --evidence-dir evidence/replay-close-subaccount-attended
+# -> needs_human in both, same reasonCode either way
+```
+
+To see the irreversible one actually complete (not just block), run the
+same human-handoff pattern as above against `member.close-sub-account`,
+then act on the real "Confirm Close" control and resume:
+
+```bash
+# Terminal 1
+npm run replay -- --capability member.close-sub-account --version 1 \
+  --input memberId=56789 --evidence-dir evidence/replay-close-subaccount-handoff \
+  --wait-for-handoff --resume-timeout-ms 900000
+
+# Terminal 2
+npm run operator -- --evidence-dir evidence/replay-close-subaccount-handoff \
+  --capability member.close-sub-account --version 1
+```
+
+The console's own `/act` endpoint takes any registered target purpose,
+not just the one hardcoded button in its HTML -- `curl -X POST
+http://localhost:4500/act --data-urlencode "targetPurpose=sub-account close confirm"`
+clicks the real control on the live session, then `curl -X POST
+http://localhost:4500/resume --data-urlencode "note=..."` hands control
+back. The worker re-grounds and completes with the account genuinely
+deleted -- `evidence/replay-close-subaccount-handoff/success.png` shows
+"Account SAV-90000 has been closed."
+
 ## Discovery (genuine LLM-driven run)
 
 Requires `ANTHROPIC_API_KEY` in `.env` (copy `.env.example`). With the

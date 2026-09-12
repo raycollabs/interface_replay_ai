@@ -13,6 +13,10 @@ import {
   unresolvableNoticePage,
   loadingPartial,
   permissionDeniedPage,
+  newSubAccountFormPage,
+  subAccountConfirmationPage,
+  closeAccountConfirmPage,
+  accountClosedPage,
 } from './templates.js';
 
 const PORT = Number(process.env.PORT ?? 4173);
@@ -152,7 +156,54 @@ app.get('/member/:memberId/accounts', requireAuth, (req, res) => {
     return res.redirect('/login?reason=session_expired');
   }
 
-  res.send(accountsPage(member.memberId));
+  res.send(accountsPage(member.memberId, member.accounts));
+});
+
+// 3.4 gap closure: sub-account creation (mutating_reversible -- a real
+// mutation, but reversible by closing the account afterward) and closure
+// (risky_irreversible -- a genuine point of no return). Generic across any
+// member, same as every other route here; the demo capabilities target
+// memberId=56789 specifically so mutating it can never touch another
+// member's regression-checked fixture data.
+let nextSubAccountSeq = 90000;
+
+app.get('/member/:memberId/accounts/new', requireAuth, (req, res) => {
+  const member = MEMBERS[req.params.memberId];
+  if (!member) return res.status(404).send(memberNotFoundPage(req.params.memberId));
+  res.send(newSubAccountFormPage(member.memberId));
+});
+
+app.post('/member/:memberId/accounts/new', requireAuth, (req, res) => {
+  const member = MEMBERS[req.params.memberId];
+  if (!member) return res.status(404).send(memberNotFoundPage(req.params.memberId));
+
+  const accountType = req.body?.accountType === 'Checking' ? 'Checking' : 'Savings';
+  const nickname = String(req.body?.nickname ?? '').trim() || undefined;
+  const prefix = accountType === 'Checking' ? 'CHK' : 'SAV';
+  const accountId = `${prefix}-${nextSubAccountSeq++}`;
+  const newAccount = { accountType: accountType as 'Savings' | 'Checking', accountId, balance: '0.00', currency: 'USD', nickname };
+  member.accounts.push(newAccount);
+
+  res.send(subAccountConfirmationPage(member.memberId, newAccount));
+});
+
+app.get('/member/:memberId/accounts/:accountId/close', requireAuth, (req, res) => {
+  const member = MEMBERS[req.params.memberId];
+  if (!member) return res.status(404).send(memberNotFoundPage(req.params.memberId));
+  const account = member.accounts.find((a) => a.accountId === req.params.accountId);
+  if (!account) return res.status(404).send(`<p>No account ${req.params.accountId} found for this member.</p>`);
+  res.send(closeAccountConfirmPage(member.memberId, account));
+});
+
+app.post('/member/:memberId/accounts/:accountId/close', requireAuth, (req, res) => {
+  const member = MEMBERS[req.params.memberId];
+  if (!member) return res.status(404).send(memberNotFoundPage(req.params.memberId));
+  const before = member.accounts.length;
+  member.accounts = member.accounts.filter((a) => a.accountId !== req.params.accountId);
+  if (member.accounts.length === before) {
+    return res.status(404).send(`<p>No account ${req.params.accountId} found for this member.</p>`);
+  }
+  res.send(accountClosedPage(member.memberId, req.params.accountId));
 });
 
 app.post('/member/:memberId/acknowledge', requireAuth, (req, res) => {

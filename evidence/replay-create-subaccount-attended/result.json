@@ -1,0 +1,7 @@
+{
+  "status": "success",
+  "outputs": {
+    "newAccountId": "SAV-90000"
+  },
+  "evidenceRef": "evidence/replay-create-subaccount-attended"
+}

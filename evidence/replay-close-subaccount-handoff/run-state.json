@@ -1,0 +1,29 @@
+{
+  "runId": "ba10936b-76b6-4ca0-830c-79913da06e1d",
+  "capabilityId": "member.close-sub-account",
+  "capabilityVersion": 1,
+  "inputs": {
+    "memberId": "[REDACTED]"
+  },
+  "cursor": 6,
+  "status": "SUCCEEDED",
+  "mode": "UNATTENDED",
+  "lease": {
+    "owner": "NONE",
+    "leaseId": null,
+    "heldSince": null,
+    "ttlMs": 300000
+  },
+  "resolvedFrom": [
+    "local-legacy-bank-demo/member.close-sub-account@1"
+  ],
+  "operatorNotes": [
+    {
+      "timestamp": "2026-09-12T19:34:02.963Z",
+      "operatorId": "operator-1",
+      "note": "Verified the request with the member by phone; confirmed closing SAV-90000."
+    }
+  ],
+  "createdAt": "2026-09-12T19:33:28.678Z",
+  "updatedAt": "2026-09-12T19:34:03.022Z"
+}

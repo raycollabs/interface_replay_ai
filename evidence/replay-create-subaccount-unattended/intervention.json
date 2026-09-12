@@ -1,0 +1,18 @@
+{
+  "interventionId": "017a293a-5390-48d2-9377-ef2bbdb6e5a2",
+  "runId": "e6a35862-3a59-47f8-adc9-843eeed65f34",
+  "sessionId": "e6a35862-3a59-47f8-adc9-843eeed65f34",
+  "capabilityId": "member.create-sub-account",
+  "goal": "Opens a new sub-account (Savings or Checking) for a member. A real mutation, but reversible -- the new account can be closed via member.close-sub-account. 3.4 gap closure: the first mutating_reversible step actually exercised end to end, not just unit-tested against evaluatePolicy() in isolation.",
+  "stepId": "submit-create",
+  "reasonCode": "Risk class \"mutating_reversible\" exceeds the unattended ceiling \"safe_reversible\".",
+  "explanation": "Replay could not safely proceed at step \"submit-create\" (Create the sub-account -- the flow's actual point of mutation): Risk class \"mutating_reversible\" exceeds the unattended ceiling \"safe_reversible\"..",
+  "screenshotRef": "evidence/replay-create-subaccount-unattended/needs-human.png",
+  "allowedHumanActions": [
+    "view",
+    "act",
+    "resume"
+  ],
+  "createdAt": "2026-09-12T19:32:16.658Z",
+  "status": "open"
+}

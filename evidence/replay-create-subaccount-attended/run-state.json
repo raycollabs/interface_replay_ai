@@ -1,0 +1,24 @@
+{
+  "runId": "906d92bb-23b5-4558-bc94-984285aeca7a",
+  "capabilityId": "member.create-sub-account",
+  "capabilityVersion": 1,
+  "inputs": {
+    "memberId": "[REDACTED]",
+    "nickname": "Emergency Fund"
+  },
+  "cursor": 9,
+  "status": "SUCCEEDED",
+  "mode": "ATTENDED",
+  "lease": {
+    "owner": "NONE",
+    "leaseId": null,
+    "heldSince": null,
+    "ttlMs": 300000
+  },
+  "resolvedFrom": [
+    "local-legacy-bank-demo/member.create-sub-account@1"
+  ],
+  "operatorNotes": [],
+  "createdAt": "2026-09-12T19:32:24.628Z",
+  "updatedAt": "2026-09-12T19:32:25.021Z"
+}

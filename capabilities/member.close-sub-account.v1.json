@@ -1,0 +1,213 @@
+{
+  "schemaVersion": "1.0.0",
+  "capabilityId": "member.close-sub-account",
+  "version": 1,
+  "status": "draft",
+  "name": "Close a member sub-account",
+  "description": "Permanently closes a member's sub-account -- a genuine point of no return. 3.4 gap closure: the first risky_irreversible step actually exercised end to end, not just unit-tested against evaluatePolicy() in isolation. The policy layer forces an explicit human decision on this step regardless of execution mode; this capability has no automatic path through it by design.",
+  "product": {
+    "vendor": "local-legacy-bank-demo",
+    "app": "member-servicing-console",
+    "versionRange": "1.x"
+  },
+  "executionModes": ["ATTENDED", "UNATTENDED"],
+  "scope": {
+    "allowedOrigins": ["http://localhost:4173"],
+    "allowedRoutes": ["/login", "/member-search", "/member/*", "/member/*/accounts", "/member/*/accounts/*/close"],
+    "allowedActionTypes": ["navigate", "click", "type"]
+  },
+  "inputs": {
+    "memberId": {
+      "type": "string",
+      "required": true,
+      "sensitive": true,
+      "pattern": "^[0-9]{5}$",
+      "example": "56789"
+    }
+  },
+  "outputs": {},
+
+  "targetRegistry": {
+    "member identifier input": {
+      "semanticPurpose": "member identifier input",
+      "framePath": [],
+      "recordedRung": 3,
+      "candidates": [
+        {
+          "strategy": { "type": "role_and_name", "role": "textbox", "name": "Member ID", "exact": true },
+          "rationale": "Preferred if the field ever gains a proper accessible name.",
+          "confidence": "medium"
+        },
+        {
+          "strategy": { "type": "associated_label", "label": "Member ID" },
+          "rationale": "Actual markup: legacy table-form label with no for/aria association. Same field as member.read-savings-balance's target.",
+          "confidence": "high"
+        }
+      ]
+    },
+    "member search submit": {
+      "semanticPurpose": "member search submit",
+      "framePath": [],
+      "recordedRung": 2,
+      "candidates": [
+        {
+          "strategy": { "type": "role_and_name", "role": "button", "name": "Search", "exact": true },
+          "rationale": "Single named submit control on the search form.",
+          "confidence": "high"
+        }
+      ]
+    },
+    "member not found banner": {
+      "semanticPurpose": "member not found banner",
+      "framePath": [],
+      "recordedRung": 2,
+      "candidates": [
+        {
+          "strategy": { "type": "role_and_name", "role": "alert", "name": "Member not found", "exact": true },
+          "rationale": "Rendered with an explicit aria-label (see the 3.3 gap-closure note in docs/slices.md).",
+          "confidence": "high"
+        }
+      ]
+    },
+    "accounts navigation": {
+      "semanticPurpose": "accounts navigation",
+      "framePath": [],
+      "recordedRung": 2,
+      "candidates": [
+        {
+          "strategy": { "type": "role_and_name", "role": "link", "name": "Accounts", "exact": true },
+          "rationale": "Plain <a> link; accessible name comes directly from link text.",
+          "confidence": "high"
+        }
+      ]
+    },
+    "sub-account close action": {
+      "semanticPurpose": "sub-account close action",
+      "framePath": [],
+      "recordedRung": 2,
+      "candidates": [
+        {
+          "strategy": { "type": "role_and_name", "role": "link", "name": "Close", "exact": true },
+          "rationale": "The accounts page's per-account Close link. Resolves to exactly one match only when the member has exactly one account -- an intentional scope limit of this demo capability, not a general multi-account disambiguation mechanism (this schema has no way to parameterize a target strategy by a runtime input value; see REPORT.md's Safety section).",
+          "confidence": "high"
+        }
+      ]
+    },
+    "sub-account close confirm": {
+      "semanticPurpose": "sub-account close confirm",
+      "framePath": [],
+      "recordedRung": 2,
+      "candidates": [
+        {
+          "strategy": { "type": "role_and_name", "role": "button", "name": "Confirm Close", "exact": true },
+          "rationale": "The warning page's own submit button -- this is the step that actually, irreversibly mutates state.",
+          "confidence": "high"
+        }
+      ]
+    },
+    "account closed marker": {
+      "semanticPurpose": "account closed marker",
+      "framePath": [],
+      "recordedRung": 2,
+      "candidates": [
+        {
+          "strategy": { "type": "role_and_name", "role": "status", "name": "Account closed", "exact": true },
+          "rationale": "Rendered with an explicit aria-label, same reasoning as every other banner purpose in this app since the 3.3 gap closure.",
+          "confidence": "high"
+        }
+      ]
+    }
+  },
+
+  "knownOutcomes": [
+    {
+      "code": "MEMBER_NOT_FOUND",
+      "description": "No member matched the supplied identifier. A legitimate result, not a failure.",
+      "detect": { "type": "controlVisible", "semanticPurpose": "member not found banner" }
+    }
+  ],
+  "interstitials": [],
+  "steps": [
+    {
+      "stepId": "navigate-search",
+      "intent": "Open the member search screen",
+      "action": "navigate",
+      "value": { "literal": "/member-search" },
+      "postcondition": { "type": "controlVisible", "semanticPurpose": "member identifier input" },
+      "riskClass": "read_only",
+      "onBlock": "escalate",
+      "timeoutMs": 8000
+    },
+    {
+      "stepId": "enter-member-id",
+      "intent": "Enter the member identifier to search for",
+      "action": "type",
+      "targetPurpose": "member identifier input",
+      "value": { "paramRef": "memberId" },
+      "postcondition": { "type": "controlHasValue", "semanticPurpose": "member identifier input", "equals": "{{inputs.memberId}}" },
+      "riskClass": "read_only",
+      "onBlock": "escalate",
+      "timeoutMs": 5000
+    },
+    {
+      "stepId": "submit-search",
+      "intent": "Submit the member search",
+      "action": "click",
+      "targetPurpose": "member search submit",
+      "postcondition": {
+        "type": "any",
+        "conditions": [
+          { "type": "controlVisible", "semanticPurpose": "accounts navigation" },
+          { "type": "controlVisible", "semanticPurpose": "member not found banner" }
+        ]
+      },
+      "riskClass": "read_only",
+      "onBlock": "escalate",
+      "timeoutMs": 10000
+    },
+    {
+      "stepId": "open-accounts",
+      "intent": "Open the member's accounts tab",
+      "action": "click",
+      "targetPurpose": "accounts navigation",
+      "postcondition": { "type": "controlVisible", "semanticPurpose": "sub-account close action" },
+      "riskClass": "read_only",
+      "onBlock": "escalate",
+      "timeoutMs": 8000
+    },
+    {
+      "stepId": "navigate-close-confirm",
+      "intent": "Open the close-account warning screen",
+      "action": "click",
+      "targetPurpose": "sub-account close action",
+      "postcondition": { "type": "controlVisible", "semanticPurpose": "sub-account close confirm" },
+      "riskClass": "read_only",
+      "onBlock": "escalate",
+      "timeoutMs": 8000
+    },
+    {
+      "stepId": "confirm-close",
+      "intent": "Permanently close the account -- the flow's point of no return",
+      "action": "click",
+      "targetPurpose": "sub-account close confirm",
+      "postcondition": { "type": "controlVisible", "semanticPurpose": "account closed marker" },
+      "riskClass": "risky_irreversible",
+      "onBlock": "escalate",
+      "timeoutMs": 8000
+    }
+  ],
+  "checkpoint": { "type": "controlVisible", "semanticPurpose": "account closed marker" },
+  "commitBoundary": {
+    "stepId": "confirm-close",
+    "idempotencyProbe": { "type": "controlVisible", "semanticPurpose": "account closed marker" }
+  },
+  "assistedRepair": {
+    "enabled": false,
+    "maxSteps": 1,
+    "requiresTenantPolicy": true
+  },
+  "provenance": {
+    "recordedAt": "2026-09-12T00:00:00.000Z",
+    "adapter": "playwright-web-adapter@0.1.0"
+  }
+}
