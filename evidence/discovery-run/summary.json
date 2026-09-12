@@ -1,10 +1,9 @@
 {
   "status": "success",
   "outputs": {
-    "savings_balance": "4235.67",
-    "currency": "USD",
+    "savings_balance": "4235.67 USD",
     "account_id": "SAV-88213"
   },
-  "summary": "Looked up member [REDACTED] (Jordan Alvarez) and found their savings account (SAV-88213) balance is 4235.67 USD.",
+  "summary": "Looked up member [REDACTED] (Jordan Alvarez) and found their savings account SAV-88213 with a current balance of 4235.67 USD.",
   "steps": 4
 }

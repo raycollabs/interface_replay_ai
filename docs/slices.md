@@ -251,12 +251,63 @@ prove the mechanism).
     output-extraction steps from final page state, rather than a
     mechanical trace replay.
 
-- [ ] **Slice 7 — Compiler + verification gate.** Trace -> artifact.
-  Compile-time uniqueness assertion (ambiguity must not reach production).
-  Second LLM pass with fresh context proposes checkpoint + output
-  extraction. `DRAFT -> VERIFIED` gated on a green replay using
-  **different** input values than discovery used — the mechanical proof
-  that the compiler parameterized rather than transcribed.
+- [x] **Slice 7 — Compiler + verification gate.** Trace -> artifact.
+  Scoped the LLM's job narrowly to what genuinely needs judgment:
+  classifying each control the discovery run *acted on* against the
+  closed semantic vocabulary, plus proposing the checkpoint (one call,
+  fresh context, no discovery history). Everything else is mechanical --
+  output *locations* are declared by the caller as a typed contract
+  (name, type, description, which `<th>` column header identifies it)
+  and found by a real DOM query (`tableLookup.ts`), not guessed from
+  whatever free text the exploring model happened to write in its own
+  summary. Compile-time uniqueness is enforced by literally replaying the
+  trace's actions live and calling the SAME `resolveTarget()` the replay
+  engine uses to verify each target resolves to exactly one match before
+  it's ever written into the artifact.
+
+  Three real problems found and fixed while making this actually
+  compile-and-verify, not simplified around:
+  1. **The model's output naming isn't stable across runs.** Two
+     discovery runs of the identical goal produced differently-shaped
+     `outputs` (`{savings_balance, currency, account_id}` vs.
+     `{savings_balance: "4235.67 USD", account_id}`, combining fields).
+     Confirmed this is real non-determinism, not a one-off — which is
+     exactly why output extraction is a declared contract mechanically
+     resolved, not parsed from the model's free text.
+  2. **A second, independent accessible-name bug**, caught by reading the
+     regenerated trace directly: the "Search" button's name computed as
+     `""`. The table-row-adjacency heuristic ran *before* checking a
+     button/link's own text content, and since Search sits in a row whose
+     preceding cell is empty, the row heuristic "won" with an empty
+     string instead of falling through. Fixed the precedence order in
+     `setOfMarks.ts`; buttons/links now check their own text first.
+  3. **The compiled artifact had no postconditions at all** — the first
+     verification replay failed with `ADAPTER_ERROR` because
+     `extract-balance` ran immediately after the "Accounts" click,
+     before the accounts-frame iframe had loaded. The hand-authored
+     artifact avoids this by hand; the compiler wasn't synthesizing the
+     equivalent. Fixed with a general, defensible heuristic sound for any
+     linear discovery trace: every click step's postcondition is "the
+     next step's target becomes visible." Also hardened the compiler's
+     own live replay with a settle wait after each click, since
+     compile-time had been passing on unguarded timing luck, not
+     correctness, before this fix existed.
+
+  Gate: `npm run compile` (one real LLM classification call) ->
+  `capabilities/member.read-savings-balance.v2.json` (status `draft`) ->
+  `npm run replay ... --input memberId=67890` (a member discovery never
+  saw) -> `status: success` with correct member-67890-specific outputs,
+  postconditions holding, checkpoint passing -> `npm run promote` ->
+  `status: verified`. Regression-checked against the original discovery
+  input (12345) afterward — both members work. Redaction re-verified
+  across compile and verification evidence — clean.
+
+  Documented limitation: `knownOutcomes` and `interstitials` are empty in
+  the compiled artifact — a single happy-path discovery run has no way to
+  discover a not-found banner or a recoverable dialog it never
+  encountered. A real pipeline would merge multiple discovery runs (or
+  accept manual authoring for these, as v1 demonstrates) rather than
+  expect one run to produce a complete error taxonomy.
 
 - [ ] **Slice 8 — Multi-tenant resolution.** Variant B of the target app
   (different labels/branding). `TenantBinding` JSON, pure

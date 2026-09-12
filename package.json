@@ -14,7 +14,9 @@
     "smoke:adapter": "tsx scripts/smoke-adapter.ts",
     "replay": "tsx scripts/replay.ts",
     "operator": "tsx scripts/operator-console.ts",
-    "discover": "tsx scripts/discover.ts"
+    "discover": "tsx scripts/discover.ts",
+    "compile": "tsx scripts/compile.ts",
+    "promote": "tsx scripts/promote.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

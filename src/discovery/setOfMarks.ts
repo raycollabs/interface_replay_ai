@@ -48,6 +48,19 @@ function markFrameScript(startMark: number): string {
         var label = document.querySelector('label[for="' + CSS.escape(el.id) + '"]');
         if (label && label.textContent) return label.textContent.trim();
       }
+      // Buttons/links carry their own visible text as their name -- check
+      // this BEFORE the table-row heuristic below. Getting this order
+      // backwards was a real bug: a submit button sitting in a row whose
+      // PRECEDING cell is empty (a common table-form layout, ours
+      // included) would return "" from the row heuristic and never fall
+      // through to its own text. The row-adjacency heuristic exists for
+      // inputs that have no visible text of their own -- it should never
+      // shadow a button/link's real name.
+      var tagEarly = el.tagName.toLowerCase();
+      if (tagEarly === 'button' || tagEarly === 'a') {
+        var ownText = (el.textContent || '').trim();
+        if (ownText) return ownText;
+      }
       var row = el.closest('tr');
       if (row) {
         var cells = Array.from(row.querySelectorAll('td,th'));
@@ -55,7 +68,6 @@ function markFrameScript(startMark: number): string {
         if (idx > 0) return (cells[idx - 1].textContent || '').trim();
       }
       var tag = el.tagName.toLowerCase();
-      if (tag === 'button' || tag === 'a') return (el.textContent || '').trim();
       if (el.placeholder) return el.placeholder;
       if (tag === 'input' && (el.type === 'submit' || el.type === 'button')) return el.value || '';
       return '';

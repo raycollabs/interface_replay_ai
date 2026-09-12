@@ -9,11 +9,12 @@ human when it can't safely proceed.
 > The model discovers. The artifact becomes a reusable capability.
 > Deterministic replay is how an AI agent invokes it in production.
 
-Build status: **Slice 6 of 9 complete** (contracts, target app, surface
+Build status: **Slice 7 of 9 complete** (contracts, target app, surface
 adapter + policy, deterministic replay engine, recoverable conditions,
-session broker + human handoff, genuine LLM-driven discovery). See
-[`docs/slices.md`](docs/slices.md) for the full plan and current progress,
-and `REPORT.md` (in progress) for the design write-up.
+session broker + human handoff, genuine LLM-driven discovery, compiler +
+verification gate). See [`docs/slices.md`](docs/slices.md) for the full
+plan and current progress, and `REPORT.md` (in progress) for the design
+write-up.
 
 ## Setup
 
@@ -158,6 +159,28 @@ why that check exists: it's there because a raw value leaked once).
 and action; `summary.json` has the final result. Prints `mode=DISCOVERY`
 and completes in a handful of steps against the live app -- no
 pre-existing artifact involved.
+
+## Compiling and verifying a discovered capability
+
+Turns a discovery trace into a versioned artifact, then proves it by
+replaying on an input discovery never saw:
+
+```bash
+# Trace -> draft artifact (one LLM classification call)
+npm run compile -- --trace-dir evidence/discovery-run \
+  --capability-id member.read-savings-balance --version 2 \
+  --output capabilities/member.read-savings-balance.v2.json \
+  --replay-input memberId=12345
+
+# The verification gate: memberId=67890 was never used during discovery
+# or compilation. Success here is the mechanical proof the compiler
+# parameterized memberId rather than transcribing "12345".
+npm run replay -- --capability member.read-savings-balance --version 2 \
+  --input memberId=67890 --evidence-dir evidence/verify-compiled
+
+# DRAFT -> VERIFIED, only after you've confirmed the replay above yourself
+npm run promote -- --path capabilities/member.read-savings-balance.v2.json
+```
 
 Each writes `run-state.json`, `events.jsonl`, `result.json`, and a
 screenshot into its `--evidence-dir`. `memberId` is declared `sensitive`

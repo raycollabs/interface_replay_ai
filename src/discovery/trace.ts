@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { ObservedControl } from './setOfMarks.js';
 
 /**
  * The discovery trace is NOT the artifact -- kept as a separate,
@@ -7,11 +8,17 @@ import { join } from 'node:path';
  * model decision, policy decision, action, result). Slice 7's compiler
  * reads this to produce a CapabilityDefinition; nothing downstream of
  * discovery ever replays this trace directly.
+ *
+ * `observation.controls` carries the FULL set-of-marks inventory for
+ * that step (role/accessibleName/framePath per mark), not just a count
+ * -- this is what lets the compiler later re-derive a target strategy
+ * for whichever mark the model acted on, without needing vision or a
+ * second guess at what "mark 7" was.
  */
 export interface TraceEntry {
   step: number;
   timestamp: string;
-  observation: { screenshotPath: string; controlCount: number };
+  observation: { screenshotPath: string; controls: ObservedControl[] };
   /** Short operational summary only -- per the "don't persist chain-of-
    *  thought" rule (same one the replay engine's evidence follows). */
   modelRationale: string;

@@ -1,0 +1,9 @@
+{
+  "status": "success",
+  "outputs": {
+    "balance": "9310.25",
+    "currency": "USD",
+    "accountId": "SAV-40988"
+  },
+  "evidenceRef": "evidence/verify-compiled"
+}

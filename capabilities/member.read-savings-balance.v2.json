@@ -1,0 +1,285 @@
+{
+  "schemaVersion": "1.0.0",
+  "capabilityId": "member.read-savings-balance",
+  "version": 2,
+  "status": "verified",
+  "name": "member.read-savings-balance",
+  "description": "Look up a member by identifier and return their current savings balance.",
+  "product": {
+    "vendor": "local-legacy-bank-demo",
+    "app": "member-servicing-console",
+    "versionRange": "1.x"
+  },
+  "executionModes": [
+    "ATTENDED",
+    "UNATTENDED"
+  ],
+  "scope": {
+    "allowedOrigins": [
+      "http://localhost:4173"
+    ],
+    "allowedRoutes": [
+      "/login",
+      "/member-search",
+      "/member/*",
+      "/member/*/accounts",
+      "/member/*/accounts-frame"
+    ],
+    "allowedActionTypes": [
+      "navigate",
+      "click",
+      "type",
+      "extract"
+    ]
+  },
+  "inputs": {
+    "memberId": {
+      "type": "string",
+      "required": true,
+      "sensitive": true,
+      "pattern": "^[0-9]{5}$",
+      "example": "12345"
+    }
+  },
+  "outputs": {
+    "balance": {
+      "type": "decimal",
+      "description": "Current savings balance",
+      "sourceStepId": "extract-balance"
+    },
+    "currency": {
+      "type": "string",
+      "description": "ISO currency code",
+      "sourceStepId": "extract-currency"
+    },
+    "accountId": {
+      "type": "string",
+      "description": "Savings account identifier",
+      "sourceStepId": "extract-accountId"
+    }
+  },
+  "targetRegistry": {
+    "account balance field": {
+      "semanticPurpose": "account balance field",
+      "framePath": [
+        "accounts-frame"
+      ],
+      "candidates": [
+        {
+          "strategy": {
+            "type": "structural_semantic",
+            "rowHeader": "Savings",
+            "columnHeader": "Balance"
+          },
+          "rationale": "Mechanically located by column header \"Balance\" on the compiled artifact's target page; verified to resolve to exactly one cell.",
+          "confidence": "high"
+        }
+      ],
+      "recordedRung": 0
+    },
+    "account currency field": {
+      "semanticPurpose": "account currency field",
+      "framePath": [
+        "accounts-frame"
+      ],
+      "candidates": [
+        {
+          "strategy": {
+            "type": "structural_semantic",
+            "rowHeader": "Savings",
+            "columnHeader": "Currency"
+          },
+          "rationale": "Mechanically located by column header \"Currency\" on the compiled artifact's target page; verified to resolve to exactly one cell.",
+          "confidence": "high"
+        }
+      ],
+      "recordedRung": 0
+    },
+    "account identifier field": {
+      "semanticPurpose": "account identifier field",
+      "framePath": [
+        "accounts-frame"
+      ],
+      "candidates": [
+        {
+          "strategy": {
+            "type": "structural_semantic",
+            "rowHeader": "Savings",
+            "columnHeader": "Account ID"
+          },
+          "rationale": "Mechanically located by column header \"Account ID\" on the compiled artifact's target page; verified to resolve to exactly one cell.",
+          "confidence": "high"
+        }
+      ],
+      "recordedRung": 0
+    },
+    "member identifier input": {
+      "semanticPurpose": "member identifier input",
+      "framePath": [],
+      "candidates": [
+        {
+          "strategy": {
+            "type": "role_and_name",
+            "role": "textbox",
+            "name": "Member ID",
+            "exact": true
+          },
+          "rationale": "Directly observed role and accessible name during discovery.",
+          "confidence": "high"
+        },
+        {
+          "strategy": {
+            "type": "associated_label",
+            "label": "Member ID"
+          },
+          "rationale": "Fallback for text inputs whose accessible name came from table-cell adjacency rather than a real label association -- the common case for this legacy target, verified for real on the \"member identifier input\" field.",
+          "confidence": "medium"
+        }
+      ],
+      "recordedRung": 1
+    },
+    "member search submit": {
+      "semanticPurpose": "member search submit",
+      "framePath": [],
+      "candidates": [
+        {
+          "strategy": {
+            "type": "role_and_name",
+            "role": "button",
+            "name": "Search",
+            "exact": true
+          },
+          "rationale": "Directly observed role and accessible name during discovery.",
+          "confidence": "high"
+        }
+      ],
+      "recordedRung": 0
+    },
+    "accounts navigation": {
+      "semanticPurpose": "accounts navigation",
+      "framePath": [],
+      "candidates": [
+        {
+          "strategy": {
+            "type": "role_and_name",
+            "role": "link",
+            "name": "Accounts",
+            "exact": true
+          },
+          "rationale": "Directly observed role and accessible name during discovery.",
+          "confidence": "high"
+        }
+      ],
+      "recordedRung": 0
+    }
+  },
+  "knownOutcomes": [],
+  "interstitials": [],
+  "steps": [
+    {
+      "stepId": "navigate-entry",
+      "intent": "Open /member-search",
+      "action": "navigate",
+      "value": {
+        "literal": "/member-search"
+      },
+      "riskClass": "read_only",
+      "onBlock": "escalate",
+      "timeoutMs": 8000
+    },
+    {
+      "stepId": "step-1-type",
+      "intent": "Enter value into \"Member ID\"",
+      "action": "type",
+      "targetPurpose": "member identifier input",
+      "value": {
+        "paramRef": "memberId"
+      },
+      "riskClass": "read_only",
+      "onBlock": "escalate",
+      "timeoutMs": 8000
+    },
+    {
+      "stepId": "step-2-click",
+      "intent": "Activate \"Search\"",
+      "action": "click",
+      "targetPurpose": "member search submit",
+      "postcondition": {
+        "type": "controlVisible",
+        "semanticPurpose": "accounts navigation"
+      },
+      "riskClass": "read_only",
+      "onBlock": "escalate",
+      "timeoutMs": 8000
+    },
+    {
+      "stepId": "step-3-click",
+      "intent": "Activate \"Accounts\"",
+      "action": "click",
+      "targetPurpose": "accounts navigation",
+      "postcondition": {
+        "type": "controlVisible",
+        "semanticPurpose": "account balance field"
+      },
+      "riskClass": "read_only",
+      "onBlock": "escalate",
+      "timeoutMs": 8000
+    },
+    {
+      "stepId": "extract-balance",
+      "intent": "Read Current savings balance",
+      "action": "extract",
+      "targetPurpose": "account balance field",
+      "riskClass": "read_only",
+      "onBlock": "escalate",
+      "timeoutMs": 5000
+    },
+    {
+      "stepId": "extract-currency",
+      "intent": "Read ISO currency code",
+      "action": "extract",
+      "targetPurpose": "account currency field",
+      "riskClass": "read_only",
+      "onBlock": "escalate",
+      "timeoutMs": 5000
+    },
+    {
+      "stepId": "extract-accountId",
+      "intent": "Read Savings account identifier",
+      "action": "extract",
+      "targetPurpose": "account identifier field",
+      "riskClass": "read_only",
+      "onBlock": "escalate",
+      "timeoutMs": 5000
+    }
+  ],
+  "checkpoint": {
+    "type": "all",
+    "conditions": [
+      {
+        "type": "controlVisible",
+        "semanticPurpose": "account balance field"
+      },
+      {
+        "type": "controlVisible",
+        "semanticPurpose": "account currency field"
+      },
+      {
+        "type": "controlVisible",
+        "semanticPurpose": "account identifier field"
+      }
+    ]
+  },
+  "assistedRepair": {
+    "enabled": false,
+    "maxSteps": 1,
+    "requiresTenantPolicy": true
+  },
+  "provenance": {
+    "discoveryRunId": "evidence/discovery-run",
+    "model": "claude-sonnet-5",
+    "recordedAt": "2026-09-12T15:47:53.904Z",
+    "adapter": "playwright-web-adapter@0.1.0",
+    "appFingerprint": "d02bc7ada672c8c5"
+  }
+}

@@ -116,7 +116,7 @@ export async function runDiscovery(opts: DiscoveryOptions): Promise<DiscoveryRes
           appendTraceEntry(opts.evidenceDir, {
             step,
             timestamp: new Date().toISOString(),
-            observation: { screenshotPath, controlCount: controls.length },
+            observation: { screenshotPath, controls },
             modelRationale: decision.shortRationale,
             toolName: decision.toolName,
             toolInput: redact(decision.toolInput as Record<string, unknown>, redactValues),
@@ -139,7 +139,7 @@ export async function runDiscovery(opts: DiscoveryOptions): Promise<DiscoveryRes
           appendTraceEntry(opts.evidenceDir, {
             step,
             timestamp: new Date().toISOString(),
-            observation: { screenshotPath, controlCount: controls.length },
+            observation: { screenshotPath, controls },
             modelRationale: decision.shortRationale,
             toolName: decision.toolName,
             toolInput: decision.toolInput,
@@ -185,7 +185,7 @@ export async function runDiscovery(opts: DiscoveryOptions): Promise<DiscoveryRes
         appendTraceEntry(opts.evidenceDir, {
           step,
           timestamp: new Date().toISOString(),
-          observation: { screenshotPath, controlCount: controls.length },
+          observation: { screenshotPath, controls },
           modelRationale: decision.shortRationale,
           toolName: decision.toolName,
           toolInput: redact(decision.toolInput as Record<string, unknown>, redactValues),

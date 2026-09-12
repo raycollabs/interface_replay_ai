@@ -56,6 +56,17 @@ export const MEMBERS: Record<string, Member> = {
       { accountType: 'Savings', accountId: 'SAV-77042', balance: '2650.00', currency: 'USD' },
     ],
   },
+  // Slice 7: a second clean happy-path member, distinct from 12345 (the
+  // one discovery used). Verifying the compiled artifact against THIS
+  // member -- not 12345 -- is the mechanical proof that the compiler
+  // actually parameterized memberId rather than transcribing "12345".
+  '67890': {
+    memberId: '67890',
+    name: 'Marisol Vega',
+    accounts: [
+      { accountType: 'Savings', accountId: 'SAV-40988', balance: '9310.25', currency: 'USD' },
+    ],
+  },
 };
 
 /** Synthetic operator credential for the demo login form. Not a real secret. */
