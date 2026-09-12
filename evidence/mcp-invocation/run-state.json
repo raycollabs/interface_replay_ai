@@ -1,0 +1,23 @@
+{
+  "runId": "ffc7a1e1-a6c1-4cf3-8e43-d5af1c58f56c",
+  "capabilityId": "member.read-savings-balance",
+  "capabilityVersion": 2,
+  "inputs": {
+    "memberId": "[REDACTED]"
+  },
+  "cursor": 7,
+  "status": "SUCCEEDED",
+  "mode": "UNATTENDED",
+  "lease": {
+    "owner": "NONE",
+    "leaseId": null,
+    "heldSince": null,
+    "ttlMs": 300000
+  },
+  "resolvedFrom": [
+    "local-legacy-bank-demo/member.read-savings-balance@2"
+  ],
+  "operatorNotes": [],
+  "createdAt": "2026-09-12T17:32:21.256Z",
+  "updatedAt": "2026-09-12T17:32:21.743Z"
+}

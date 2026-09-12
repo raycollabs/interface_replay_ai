@@ -18,10 +18,13 @@
     "compile": "tsx scripts/compile.ts",
     "promote": "tsx scripts/promote.ts",
     "replay:tenant": "tsx scripts/replay-tenant.ts",
-    "catalog:demo": "tsx scripts/catalog-demo.ts"
+    "catalog:demo": "tsx scripts/catalog-demo.ts",
+    "inspect": "tsx scripts/inspect-page.ts",
+    "mcp": "tsx scripts/mcp-server.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "cookie-parser": "^1.4.7",
     "express": "^5.2.1",
     "playwright": "^1.63.0",

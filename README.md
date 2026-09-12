@@ -36,6 +36,101 @@ npm run emit:jsonschema    # regenerate capabilities/schema.json from the Zod so
 Copy `.env.example` to `.env` and set `ANTHROPIC_API_KEY` if you want to run
 discovery or compilation (see below) — nothing else needs it.
 
+## Verify it yourself
+
+Every claim in this repo is designed to be checked directly, not taken on
+faith. Three ways to do that, cheapest first.
+
+### 1. Look at the actual screenshots
+
+Every `npm run replay` / `discover` / `compile` / `catalog:demo` command
+writes a real screenshot into its `--evidence-dir`. Just open the PNG
+files under `/evidence/*/`.
+
+### 2. Browse the target app yourself, live, in your own browser
+
+```bash
+npm run target-app
+```
+
+Leave it running and open `http://localhost:4173` in a normal browser tab.
+Log in with `operator` / `demo-pass-1234`, then try these — each is an
+independent server-side fixture, so your manual session never collides
+with anything a script is doing:
+
+| Member ID | What you should see |
+|---|---|
+| `12345` | Happy path — Savings, SAV-88213, 4235.67 USD |
+| `99999` | "No member found" banner (a business outcome, not an error page) |
+| `44444` | An "unexpected notice" the first time you view its Accounts page — click "Continue" to get through it |
+| `55555` | A "Loading account data..." placeholder the first time you view its Accounts page — reload to see the real table |
+| `33333` | A notice with **no** way through in the UI itself — this is the one that requires the human-handoff flow (below), not a click |
+| `67890` | A second clean happy path — Savings, SAV-40988, 9310.25 USD |
+
+For a non-visual, scriptable version of the same check (every element on
+a page, printed as text, plus a screenshot) without needing to click
+through yourself:
+
+```bash
+npm run inspect -- --route /member/12345/accounts
+```
+
+(On git-bash/MSYS, prefix with `MSYS_NO_PATHCONV=1` or the leading `/` in
+`--route` gets mangled into a Windows path.)
+
+### 3. Drive the human-handoff flow live, watching both sides
+
+```bash
+# Terminal 1
+npm run replay -- --capability member.read-savings-balance --version 1 \
+  --input memberId=33333 --evidence-dir evidence/replay-handoff \
+  --wait-for-handoff --resume-timeout-ms 900000
+
+# Terminal 2
+npm run operator -- --evidence-dir evidence/replay-handoff \
+  --capability member.read-savings-balance --version 1
+```
+
+Open `http://localhost:4500` — this is a real second process attached via
+CDP to the exact browser Terminal 1 suspended, not a simulation. You can
+also open `http://localhost:9333/json` in a browser at that point to see
+the raw CDP target list Chromium is exposing (`CDP_PORT` in
+`src/surface/adapter.ts`) — the same endpoint the operator console and
+the compiler both attach to.
+
+## Capability catalog over real MCP (vendor-neutral)
+
+The capability catalog (Slice 9) is exposed two ways: through the
+Anthropic SDK directly (`npm run catalog:demo`), and as a genuine MCP
+server (`@modelcontextprotocol/sdk`, real `tools/list`/`tools/call`
+JSON-RPC over HTTP) so any MCP-compatible client can use it, not just
+Claude via the Anthropic SDK.
+
+```bash
+npm run mcp -- --port 4600
+```
+
+**Browser test UI** — open `http://localhost:4600/` — lists every tool
+from a real `tools/list` call and gives you a form to `tools/call` each
+one, showing the raw JSON-RPC response.
+
+**Postman-style curl**, hitting the identical endpoint the UI uses:
+
+```bash
+curl -s -X POST http://localhost:4600/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+
+curl -s -X POST http://localhost:4600/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"member_read-savings-balance_v2","arguments":{"memberId":"67890"}}}'
+```
+
+Only `v2` (promoted to `verified` in Slice 7) appears in the catalog —
+`v1` is still `draft` and is excluded by `loadCatalog()` on purpose.
+
 ## What's here so far
 
 ```

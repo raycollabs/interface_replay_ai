@@ -87,7 +87,7 @@ Real defects caught by reading raw evidence rather than trusting a green result,
 
 ## 7. Cuts
 
-Two stretch goals were built rather than left as design-only, since both turned out to be cheap given the schema decisions already made: **multi-tenant resolution** (§4 — `TenantBindingSchema`, `resolveCapability()`, a live cross-tenant replay against a differently-labeled variant) and the **capability catalog** (`src/catalog/index.ts` turns every verified artifact into an Anthropic tool definition from the same Zod schema that validates it on disk; `npm run catalog:demo` shows Claude discovering and invoking `member.read-savings-balance@2` by name with typed arguments from a plain-language request — closing the loop on the brief's own "an agent-invocable capability" framing).
+Two stretch goals were built rather than left as design-only, since both turned out to be cheap given the schema decisions already made: **multi-tenant resolution** (§4 — `TenantBindingSchema`, `resolveCapability()`, a live cross-tenant replay against a differently-labeled variant) and the **capability catalog** (`src/catalog/index.ts` turns every verified artifact into a tool definition from the same Zod schema that validates it on disk; `npm run catalog:demo` shows Claude discovering and invoking `member.read-savings-balance@2` by name with typed arguments from a plain-language request). The catalog is additionally exposed over genuine MCP (`@modelcontextprotocol/sdk`, real `tools/list`/`tools/call` JSON-RPC over HTTP, `npm run mcp`) rather than only the Anthropic-SDK path — vendor-neutral discovery and invocation, verified with both a browser test UI and raw `curl`.
 
 Deliberately still not built, and why:
 
