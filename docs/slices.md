@@ -395,3 +395,21 @@ prove the mechanism).
   individually succeeds) into a `stable: boolean` verdict. Run for real:
   5/5 successes, zero rung drift across every step, ~660ms average per
   replay against `member.read-savings-balance@2` with `memberId=67890`.
+
+  **A gap in the verification process itself, caught by being asked
+  directly "have you recorded evidence of testing the final
+  implementation."** Checking properly surfaced a real answer, not a
+  reflexive "yes": the long-running MCP server process (`npm run mcp`)
+  had been started *before* this slice's compiler/policy changes and
+  loads its catalog once at startup — it was silently serving a stale,
+  pre-fix artifact the whole time those changes were being made and
+  committed. Restarted it and re-verified `tools/call` against the
+  actually-current artifact. Separately, the policy route-matcher
+  refactor (this slice) had only been *unit*-tested against v1's `*`
+  wildcard-style routes, never live-replayed afterward — re-ran v1's
+  happy path and business-outcome cases live against the current code to
+  close that gap too, both green. The general lesson, stated plainly: a
+  long-running process holding state in memory is a place evidence can
+  quietly go stale even when the file on disk and the git history are
+  both correct — worth checking explicitly, not assuming from a clean
+  `git status`.
