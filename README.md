@@ -9,9 +9,9 @@ human when it can't safely proceed.
 > The model discovers. The artifact becomes a reusable capability.
 > Deterministic replay is how an AI agent invokes it in production.
 
-Build status: **Slice 0 of 9 complete** (contracts). See [`docs/slices.md`](docs/slices.md)
-for the full plan and current progress, and `REPORT.md` (added from Slice 5)
-for the design write-up.
+Build status: **Slice 1 of 9 complete** (contracts, target app). See
+[`docs/slices.md`](docs/slices.md) for the full plan and current progress,
+and `REPORT.md` (added from Slice 5) for the design write-up.
 
 ## Setup
 
@@ -44,8 +44,27 @@ scripts/          validate-artifacts.ts (schema gate) and emit-json-schema.ts
                    definition for the capability catalog).
 tests/            Vitest suite over the contracts, including negative cases
                    (rejects PAUSED as a run status, rejects free-text
-                   conditions, rejects an out-of-vocabulary semantic purpose).
+                   conditions, rejects an out-of-vocabulary semantic purpose,
+                   flags a targetRegistry referential-integrity break).
+target-app/       The local legacy-style banking demo automation runs
+                   against: login, member search, member detail, accounts.
+                   Table layout, no test IDs, a member-ID field with no
+                   label association (forces the adapter's fallback
+                   ladder to actually fire), account fields rendered
+                   inside a named iframe (a real frame-traversal case).
+docs/capability.schema.json  Generated JSON Schema (do not hand-edit —
+                   regenerate with `npm run emit:jsonschema`).
 ```
+
+## Running the target app
+
+```bash
+npm run target-app
+# Target app listening on http://localhost:4173
+# Login with username="operator" password="demo-pass-1234"  (synthetic, not a real credential)
+```
+
+Then in a browser: `/login` -> `/member-search` -> search `12345` -> `/member/12345` -> "Accounts" link -> savings balance renders inside the accounts iframe. Any other member ID currently 404s with a not-found banner (business-outcome handling for this is wired up in Slice 4).
 
 ## Demo path (grows per slice)
 

@@ -15,10 +15,23 @@ prove the mechanism).
   the code can read the schema and say what the capability does, needs,
   and returns.
 
-- [ ] **Slice 1 — Target app, happy path.** Local legacy-style banking demo:
+- [x] **Slice 1 — Target app, happy path.** Local legacy-style banking demo:
   login, member search, member detail, accounts, savings balance.
-  Frameset/table layout, no test IDs, labels by adjacency. No error routes
-  yet (added in Slice 4). Gate: a human can complete the flow in a browser.
+  Table layout, no test IDs, member-ID field labeled by adjacent `<td>`
+  with no `for`/`aria` association (deliberately broken — forces the
+  associated_label fallback to actually fire on every real replay, not
+  just declared in principle). Account fields render inside a named
+  iframe (`accounts-frame`), a genuine frame-traversal case. No error
+  routes yet (added in Slice 4). Gate: full happy path walked end-to-end
+  via curl with a cookie jar (login -> search -> detail -> accounts ->
+  iframe balance data); unknown member returns 404.
+  Surfaced a schema gap fixed in this slice: conditions (checkpoint,
+  known outcomes, interstitials) referenced a control by `semanticPurpose`
+  alone with no way to resolve it. Added `targetRegistry` — the one place
+  every purpose resolves to a concrete strategy + frame context — and
+  moved `framePath` from the `structural_semantic` strategy variant up to
+  the target level, since frame context applies to every candidate
+  strategy for a control, not just the structural one.
 
 - [ ] **Slice 2 — Surface adapter + policy.** Out-of-process Playwright
   browser (headed, stable `sessionId` — built now so Slice 5's handoff is

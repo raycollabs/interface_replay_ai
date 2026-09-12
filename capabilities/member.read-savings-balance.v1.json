@@ -13,7 +13,7 @@
   "executionModes": ["ATTENDED", "UNATTENDED"],
   "scope": {
     "allowedOrigins": ["http://localhost:4173"],
-    "allowedRoutes": ["/login", "/member-search", "/member/*", "/member/*/accounts"],
+    "allowedRoutes": ["/login", "/member-search", "/member/*", "/member/*/accounts", "/member/*/accounts-frame"],
     "allowedActionTypes": ["navigate", "click", "type", "extract", "wait", "assert"]
   },
   "inputs": {
@@ -30,6 +30,123 @@
     "balance": { "type": "decimal", "description": "Current savings balance", "sourceStepId": "extract-balance" },
     "currency": { "type": "string", "description": "ISO currency code", "sourceStepId": "extract-currency" }
   },
+
+  "targetRegistry": {
+    "member identifier input": {
+      "semanticPurpose": "member identifier input",
+      "framePath": [],
+      "recordedRung": 3,
+      "candidates": [
+        {
+          "strategy": { "type": "role_and_name", "role": "textbox", "name": "Member ID", "exact": true },
+          "rationale": "Preferred if the field ever gains a proper accessible name (aria-label or <label for>).",
+          "confidence": "medium"
+        },
+        {
+          "strategy": { "type": "associated_label", "label": "Member ID" },
+          "rationale": "Actual markup: the label is an adjacent <td> with no for/aria association, a legacy table-form pattern. Resolved via the adapter's nearest-preceding-cell-in-row heuristic, not Playwright's built-in label matching (which requires a real <label> element). Rung 2 (role_and_name) genuinely fails to resolve against this control -- this fallback firing on every real replay is expected, not a decorative fallback.",
+          "confidence": "high"
+        }
+      ]
+    },
+    "member search submit": {
+      "semanticPurpose": "member search submit",
+      "framePath": [],
+      "recordedRung": 2,
+      "candidates": [
+        {
+          "strategy": { "type": "role_and_name", "role": "button", "name": "Search", "exact": true },
+          "rationale": "Single named submit control on the search form; accessible name comes from visible button text, so role+name resolves directly with no label-association dependency.",
+          "confidence": "high"
+        }
+      ]
+    },
+    "member not found banner": {
+      "semanticPurpose": "member not found banner",
+      "framePath": [],
+      "recordedRung": 2,
+      "candidates": [
+        {
+          "strategy": { "type": "role_and_name", "role": "alert", "name": "", "exact": false },
+          "rationale": "Rendered as role=alert; matched by role alone since the message text is parameterized per member ID.",
+          "confidence": "high"
+        }
+      ]
+    },
+    "accounts navigation": {
+      "semanticPurpose": "accounts navigation",
+      "framePath": [],
+      "recordedRung": 2,
+      "candidates": [
+        {
+          "strategy": { "type": "role_and_name", "role": "link", "name": "Accounts", "exact": true },
+          "rationale": "Plain <a> link; accessible name comes directly from link text, no external label dependency -- resolves on the first candidate with no fallback needed.",
+          "confidence": "high"
+        }
+      ]
+    },
+    "savings account row": {
+      "semanticPurpose": "savings account row",
+      "framePath": ["accounts-frame"],
+      "recordedRung": 5,
+      "candidates": [
+        {
+          "strategy": { "type": "structural_semantic", "rowHeader": "Savings", "columnHeader": "Account Type" },
+          "rationale": "The accounts table is rendered inside a named iframe (a deliberate frame-traversal case); the row itself is identified by its own first-cell value.",
+          "confidence": "high"
+        }
+      ]
+    },
+    "account identifier field": {
+      "semanticPurpose": "account identifier field",
+      "framePath": ["accounts-frame"],
+      "recordedRung": 5,
+      "candidates": [
+        {
+          "strategy": { "type": "structural_semantic", "rowHeader": "Savings", "columnHeader": "Account ID" },
+          "rationale": "Legacy table has no test IDs; row/column header pair is the most semantically stable locator available, and must resolve inside the accounts-frame iframe.",
+          "confidence": "high"
+        }
+      ]
+    },
+    "account balance field": {
+      "semanticPurpose": "account balance field",
+      "framePath": ["accounts-frame"],
+      "recordedRung": 5,
+      "candidates": [
+        {
+          "strategy": { "type": "structural_semantic", "rowHeader": "Savings", "columnHeader": "Balance" },
+          "rationale": "Same table; column header 'Balance' is the semantic key, independent of visual column position.",
+          "confidence": "high"
+        }
+      ]
+    },
+    "account currency field": {
+      "semanticPurpose": "account currency field",
+      "framePath": ["accounts-frame"],
+      "recordedRung": 5,
+      "candidates": [
+        {
+          "strategy": { "type": "structural_semantic", "rowHeader": "Savings", "columnHeader": "Currency" },
+          "rationale": "Same table; column header 'Currency'.",
+          "confidence": "high"
+        }
+      ]
+    },
+    "session reauth prompt": {
+      "semanticPurpose": "session reauth prompt",
+      "framePath": [],
+      "recordedRung": 2,
+      "candidates": [
+        {
+          "strategy": { "type": "role_and_name", "role": "dialog", "name": "Session Expiring", "exact": false },
+          "rationale": "Placeholder pending Slice 4, which adds the session-timeout interstitial to the target app. Declared now for schema/referential completeness since this capability's interstitials[] already references it.",
+          "confidence": "low"
+        }
+      ]
+    }
+  },
+
   "knownOutcomes": [
     {
       "code": "MEMBER_NOT_FOUND",
@@ -60,22 +177,7 @@
       "stepId": "enter-member-id",
       "intent": "Enter the member identifier to search for",
       "action": "type",
-      "target": {
-        "semanticPurpose": "member identifier input",
-        "recordedRung": 2,
-        "candidates": [
-          {
-            "strategy": { "type": "role_and_name", "role": "textbox", "name": "Member ID", "exact": true },
-            "rationale": "Accessible role+name is stable across label rewording and survives table/frame layout changes.",
-            "confidence": "high"
-          },
-          {
-            "strategy": { "type": "associated_label", "label": "Member ID" },
-            "rationale": "Fallback if the accessible name is stripped by a future markup change; same visible label.",
-            "confidence": "medium"
-          }
-        ]
-      },
+      "targetPurpose": "member identifier input",
       "value": { "paramRef": "memberId" },
       "postcondition": { "type": "controlHasValue", "semanticPurpose": "member identifier input", "equals": "{{inputs.memberId}}" },
       "riskClass": "read_only",
@@ -86,17 +188,7 @@
       "stepId": "submit-search",
       "intent": "Submit the member search",
       "action": "click",
-      "target": {
-        "semanticPurpose": "member search submit",
-        "recordedRung": 2,
-        "candidates": [
-          {
-            "strategy": { "type": "role_and_name", "role": "button", "name": "Search", "exact": true },
-            "rationale": "Single named submit control on the search form; role+name is unambiguous.",
-            "confidence": "high"
-          }
-        ]
-      },
+      "targetPurpose": "member search submit",
       "postcondition": {
         "type": "any",
         "conditions": [
@@ -112,27 +204,7 @@
       "stepId": "open-accounts",
       "intent": "Open the member's accounts tab",
       "action": "click",
-      "target": {
-        "semanticPurpose": "accounts navigation",
-        "recordedRung": 2,
-        "candidates": [
-          {
-            "strategy": { "type": "role_and_name", "role": "link", "name": "Accounts", "exact": true },
-            "rationale": "Primary in-page navigation control; stable role+name.",
-            "confidence": "high"
-          },
-          {
-            "strategy": {
-              "type": "structural_semantic",
-              "framePath": ["main"],
-              "rowHeader": "Accounts",
-              "columnHeader": "Navigation"
-            },
-            "rationale": "Table-layout fallback for the legacy frameset variant of this screen.",
-            "confidence": "medium"
-          }
-        ]
-      },
+      "targetPurpose": "accounts navigation",
       "postcondition": { "type": "controlVisible", "semanticPurpose": "savings account row" },
       "riskClass": "read_only",
       "onBlock": "escalate",
@@ -142,22 +214,7 @@
       "stepId": "extract-account-id",
       "intent": "Read the savings account identifier",
       "action": "extract",
-      "target": {
-        "semanticPurpose": "account identifier field",
-        "recordedRung": 5,
-        "candidates": [
-          {
-            "strategy": {
-              "type": "structural_semantic",
-              "framePath": [],
-              "rowHeader": "Savings",
-              "columnHeader": "Account ID"
-            },
-            "rationale": "Legacy table layout has no test IDs; row/column header pair is the most semantically stable locator available.",
-            "confidence": "high"
-          }
-        ]
-      },
+      "targetPurpose": "account identifier field",
       "riskClass": "read_only",
       "onBlock": "escalate",
       "timeoutMs": 5000
@@ -166,22 +223,7 @@
       "stepId": "extract-balance",
       "intent": "Read the current savings balance",
       "action": "extract",
-      "target": {
-        "semanticPurpose": "account balance field",
-        "recordedRung": 5,
-        "candidates": [
-          {
-            "strategy": {
-              "type": "structural_semantic",
-              "framePath": [],
-              "rowHeader": "Savings",
-              "columnHeader": "Balance"
-            },
-            "rationale": "Same table; column header 'Balance' is the semantic key, independent of visual position.",
-            "confidence": "high"
-          }
-        ]
-      },
+      "targetPurpose": "account balance field",
       "riskClass": "read_only",
       "onBlock": "escalate",
       "timeoutMs": 5000
@@ -190,22 +232,7 @@
       "stepId": "extract-currency",
       "intent": "Read the account currency",
       "action": "extract",
-      "target": {
-        "semanticPurpose": "account currency field",
-        "recordedRung": 5,
-        "candidates": [
-          {
-            "strategy": {
-              "type": "structural_semantic",
-              "framePath": [],
-              "rowHeader": "Savings",
-              "columnHeader": "Currency"
-            },
-            "rationale": "Same table; column header 'Currency'.",
-            "confidence": "high"
-          }
-        ]
-      },
+      "targetPurpose": "account currency field",
       "riskClass": "read_only",
       "onBlock": "escalate",
       "timeoutMs": 5000

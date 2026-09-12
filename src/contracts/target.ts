@@ -39,7 +39,6 @@ export const StrategySchema = z.discriminatedUnion('type', [
   // its own row/column addressing).
   z.object({
     type: z.literal('structural_semantic'),
-    framePath: z.array(z.string()).default([]),
     rowHeader: z.string(),
     columnHeader: z.string(),
   }),
@@ -71,6 +70,13 @@ export const TargetSchema = z.object({
    * and several competing ways (strategies) to find it.
    */
   semanticPurpose: SemanticPurposeSchema,
+  /**
+   * Frame context applies to ALL candidate strategies for this control, not
+   * just structural_semantic ones — a role_and_name lookup inside an
+   * iframe still has to switch into that frame first. Empty array means
+   * the top-level document. Named by iframe `name`/`id`, outermost first.
+   */
+  framePath: z.array(z.string()).default([]),
   /** Ordered by preference; resolver tries candidates in order. */
   candidates: z.array(TargetCandidateSchema).min(1),
   /** Which rung matched at record/compile time — the drift-telemetry signal. */

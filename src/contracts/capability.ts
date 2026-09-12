@@ -1,6 +1,9 @@
 import { z } from 'zod';
-import { ConditionSchema } from './condition.js';
+import { ConditionSchema, type Condition } from './condition.js';
 import { TargetSchema } from './target.js';
+import { SEMANTIC_PURPOSES } from './semanticPurposes.js';
+
+const SemanticPurposeSchema = z.enum(SEMANTIC_PURPOSES);
 
 export const RiskClassSchema = z.enum([
   'read_only',
@@ -41,7 +44,14 @@ export const CapabilityStepSchema = z.object({
    *  money-moving capability reads, not `click(#btn_4)`. */
   intent: z.string(),
   action: ActionTypeSchema,
-  target: TargetSchema.optional(), // absent for e.g. `wait`
+  /**
+   * A reference into the capability's `targetRegistry`, not an inline
+   * Target — the registry is the single place a semantic purpose resolves
+   * to a concrete strategy+frame, shared between step actions AND
+   * condition references (checkpoint, knownOutcomes, interstitials all
+   * refer to controls by semanticPurpose too). Absent for e.g. `wait`.
+   */
+  targetPurpose: SemanticPurposeSchema.optional(),
   value: ValueRefSchema.optional(),
   /** Must hold before acting; unmet -> PRECONDITION_UNMET, never a guess. */
   precondition: ConditionSchema.optional(),
@@ -152,6 +162,24 @@ export const CapabilityDefinitionSchema = z.object({
   inputs: z.record(InputDefSchema),
   outputs: z.record(OutputDefSchema),
 
+  /**
+   * Every control referenced ANYWHERE in this capability — by a step's
+   * `targetPurpose`, or by a `semanticPurpose` inside any Condition
+   * (checkpoint, knownOutcomes[].detect, interstitials[].match) —
+   * resolves through this one registry. Keyed by semantic purpose (the
+   * key must equal the entry's own `semanticPurpose`; validated at load,
+   * not just by convention — see scripts/validate-artifacts.ts).
+   *
+   * This is what makes a checkpoint or a business-outcome probe actually
+   * executable: a Condition only carries a purpose string, and the
+   * registry is where that string becomes a concrete strategy + frame
+   * context. Centralizing it here (instead of duplicating a Target inline
+   * wherever a purpose is mentioned) is also the tenant-override seam: a
+   * TenantBinding overrides registry entries, never step or condition
+   * bodies.
+   */
+  targetRegistry: z.record(z.string(), TargetSchema).default({}),
+
   knownOutcomes: z.array(KnownOutcomeSchema).default([]),
   interstitials: z.array(InterstitialSchema).default([]),
 
@@ -202,3 +230,73 @@ export const CapabilityDefinitionSchema = z.object({
 });
 
 export type CapabilityDefinition = z.infer<typeof CapabilityDefinitionSchema>;
+
+/** Recursively collects every semanticPurpose referenced inside a Condition
+ *  tree (leaf controlVisible/controlAbsent/controlHasValue nodes, walking
+ *  through all/any composition). */
+function collectPurposesFromCondition(condition: Condition, into: Set<string>): void {
+  switch (condition.type) {
+    case 'controlVisible':
+    case 'controlAbsent':
+    case 'controlHasValue':
+      into.add(condition.semanticPurpose);
+      return;
+    case 'all':
+    case 'any':
+      for (const c of condition.conditions) collectPurposesFromCondition(c, into);
+      return;
+    case 'textVisible':
+    case 'textAbsent':
+    case 'urlMatches':
+      return;
+  }
+}
+
+/**
+ * Every purpose mentioned anywhere in the capability — by a step's
+ * targetPurpose, or inside any condition (checkpoint, known outcomes,
+ * interstitials, step pre/postconditions).
+ */
+export function collectReferencedPurposes(capability: CapabilityDefinition): Set<string> {
+  const purposes = new Set<string>();
+  for (const step of capability.steps) {
+    if (step.targetPurpose) purposes.add(step.targetPurpose);
+    if (step.precondition) collectPurposesFromCondition(step.precondition, purposes);
+    if (step.postcondition) collectPurposesFromCondition(step.postcondition, purposes);
+  }
+  collectPurposesFromCondition(capability.checkpoint, purposes);
+  for (const outcome of capability.knownOutcomes) {
+    collectPurposesFromCondition(outcome.detect, purposes);
+  }
+  for (const interstitial of capability.interstitials) {
+    collectPurposesFromCondition(interstitial.match, purposes);
+  }
+  return purposes;
+}
+
+/**
+ * Referential integrity check: every purpose actually used must have a
+ * targetRegistry entry, and every registry entry's key must match its own
+ * declared semanticPurpose. Deliberately NOT a Zod .superRefine — this
+ * needs the fully-parsed object (Condition unions resolved) and reads more
+ * clearly as an explicit, separately-callable check that both
+ * validate-artifacts.ts and the compiler (Slice 7) can reuse.
+ */
+export function validateTargetRegistryIntegrity(capability: CapabilityDefinition): string[] {
+  const errors: string[] = [];
+  const referenced = collectReferencedPurposes(capability);
+
+  for (const purpose of referenced) {
+    if (!(purpose in capability.targetRegistry)) {
+      errors.push(`Purpose "${purpose}" is referenced but has no targetRegistry entry.`);
+    }
+  }
+  for (const [key, entry] of Object.entries(capability.targetRegistry)) {
+    if (entry.semanticPurpose !== key) {
+      errors.push(
+        `targetRegistry key "${key}" does not match its entry's semanticPurpose "${entry.semanticPurpose}".`,
+      );
+    }
+  }
+  return errors;
+}

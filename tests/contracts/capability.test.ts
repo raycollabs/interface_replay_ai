@@ -6,6 +6,7 @@ import {
   ConditionSchema,
   ExecutionResultSchema,
   RunStateSchema,
+  validateTargetRegistryIntegrity,
 } from '../../src/contracts/index.js';
 
 function loadSample() {
@@ -35,11 +36,34 @@ describe('CapabilityDefinitionSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('rejects a target whose semanticPurpose is not in the closed vocabulary', () => {
+  it('rejects a step targetPurpose that is not in the closed vocabulary', () => {
     const sample = loadSample();
-    sample.steps[1].target.semanticPurpose = 'some made up purpose';
+    sample.steps[1].targetPurpose = 'some made up purpose';
     const result = CapabilityDefinitionSchema.safeParse(sample);
     expect(result.success).toBe(false);
+  });
+
+  it('rejects a targetRegistry entry whose key does not match its own semanticPurpose', () => {
+    const sample = loadSample();
+    // Rename the registry key without updating the entry's own semanticPurpose field.
+    sample.targetRegistry['renamed key'] = sample.targetRegistry['member identifier input'];
+    delete sample.targetRegistry['member identifier input'];
+    const parsed = CapabilityDefinitionSchema.parse(sample);
+    const errors = validateTargetRegistryIntegrity(parsed);
+    expect(errors.some((e) => e.includes('does not match'))).toBe(true);
+  });
+
+  it('flags a purpose referenced by a step/condition with no targetRegistry entry', () => {
+    const sample = loadSample();
+    delete sample.targetRegistry['account currency field'];
+    const parsed = CapabilityDefinitionSchema.parse(sample);
+    const errors = validateTargetRegistryIntegrity(parsed);
+    expect(errors.some((e) => e.includes('account currency field'))).toBe(true);
+  });
+
+  it('passes registry integrity on the unmodified sample (every referenced purpose is registered)', () => {
+    const parsed = CapabilityDefinitionSchema.parse(loadSample());
+    expect(validateTargetRegistryIntegrity(parsed)).toEqual([]);
   });
 
   it('rejects an unknown action type (closed enum, not free text)', () => {

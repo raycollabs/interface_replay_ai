@@ -8,7 +8,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CapabilityDefinitionSchema } from '../src/contracts/index.js';
+import { CapabilityDefinitionSchema, validateTargetRegistryIntegrity } from '../src/contracts/index.js';
 
 const capabilitiesDir = fileURLToPath(new URL('../capabilities', import.meta.url));
 
@@ -36,10 +36,18 @@ for (const file of files) {
   const result = CapabilityDefinitionSchema.safeParse(parsed);
   if (result.success) {
     const cap = result.data;
+    const registryErrors = validateTargetRegistryIntegrity(cap);
+    if (registryErrors.length > 0) {
+      console.error(`✗ ${file} — targetRegistry integrity failed:`);
+      for (const err of registryErrors) console.error(`    ${err}`);
+      failed++;
+      continue;
+    }
     console.log(
       `✓ ${file} — ${cap.capabilityId}@${cap.version} (${cap.status}) — ` +
         `${cap.steps.length} steps, ${Object.keys(cap.inputs).length} inputs, ` +
-        `${Object.keys(cap.outputs).length} outputs, ${cap.knownOutcomes.length} known outcomes`,
+        `${Object.keys(cap.outputs).length} outputs, ${cap.knownOutcomes.length} known outcomes, ` +
+        `${Object.keys(cap.targetRegistry).length} registered targets`,
     );
   } else {
     console.error(`✗ ${file} — schema validation failed:`);

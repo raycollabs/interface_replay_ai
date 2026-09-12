@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { CapabilityDefinitionSchema } from '../src/contracts/index.js';
 
-const outPath = fileURLToPath(new URL('../capabilities/schema.json', import.meta.url));
+const outPath = fileURLToPath(new URL('../docs/capability.schema.json', import.meta.url));
 
 const schema = zodToJsonSchema(CapabilityDefinitionSchema, 'CapabilityDefinition');
 
