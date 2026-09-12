@@ -60,22 +60,46 @@ prove the mechanism).
   controls for a model to choose from. Moved into Slice 6, where it's
   actually needed, rather than building it ahead of any consumer.
 
-- [ ] **Slice 3 — Replay engine + run state. The walking skeleton.** The
-  hardcoded array becomes artifact-driven. Step loop, precondition /
-  postcondition waits (no unconditional sleeps anywhere), checkpoint
-  verification, output extraction, the four-arm result, durable run state
-  written after every step, an `llmCalls === 0` assertion test. Gate:
-  `npm run replay -- --capability member.read-savings-balance --input memberId=12345`
-  returns `{status:"success", outputs:{...}}` with evidence saved.
+- [x] **Slice 3 — Replay engine + run state. The walking skeleton.** The
+  hardcoded array becomes artifact-driven (`ReplayRun` in
+  `src/replay/engine.ts`). Step loop, precondition/postcondition waits (no
+  unconditional sleeps anywhere), checkpoint verification, output
+  extraction, the four-arm result, durable run state written after every
+  step, a structural `no-llm-import` test (scans `src/replay`,
+  `src/surface`, `src/policy` for any LLM-client import — fails the
+  moment one is added later, on purpose or by accident, not just a
+  runtime assertion). Also added: runtime input validation against the
+  declared schema (required + pattern) before anything touches the
+  surface — a real gap in the original plan, caught while wiring the CLI.
+  Gate (`npm run replay -- --capability member.read-savings-balance --version 1 --input memberId=12345 --evidence-dir evidence/replay-success`):
+  returns `{status:"success", outputs:{accountId,balance,currency}}`.
+  Evidence directory contains `run-state.json`, `events.jsonl`,
+  `result.json`, `success.png` — confirmed by grep that the raw
+  `memberId` value appears in NONE of them (redaction-at-capture,
+  verified, not just asserted).
   **End of this slice = a complete vertical thread through every
   production layer, with no LLM in the repo.**
 
-- [ ] **Slice 4 — Error taxonomy, one instance per class.** Add to the
-  target app: a not-found member, a slow route, an unknown dialog. Add to
-  replay: business-outcome probes evaluated *before* postconditions, one
-  bounded recovery handler, failure classification. Gate: three evidence
-  directories (`replay-business-outcome`, `replay-recovered`,
-  `replay-failure`), each correctly classified.
+  Scope pulled forward from Slice 4 (the mechanism was already there once
+  the engine existed, so proving it cost nothing extra): the same run
+  also produced `evidence/replay-business-outcome/` (memberId=99999 ->
+  `MEMBER_NOT_FOUND`, detected at the `submit-search` step boundary
+  *before* its postcondition would otherwise have been evaluated — the
+  ordering that keeps a legitimate business result from being
+  misclassified as a broken step) and `evidence/replay-failure/`
+  (memberId=`abc` -> `INPUT_CONTRACT_VIOLATION`, rejected pre-flight
+  against the declared `^[0-9]{5}$` pattern). Three of the four
+  `ExecutionResult` arms demonstrated with real evidence by the end of
+  Slice 3; `needs_human` follows in Slice 5, once there's a human to hand
+  off to.
+
+- [ ] **Slice 4 — Recoverable conditions.** With business outcome and
+  hard-failure classification already proven in Slice 3, this slice is
+  narrower than originally scoped: add a slow-loading route and an
+  unknown-dialog route to the target app, and prove the bounded
+  interstitial-recovery path in `ReplayRun` (already implemented
+  structurally, not yet exercised by real data) actually recovers —
+  `evidence/replay-recovered/`.
 
 - [ ] **Slice 5 — Session broker + handoff.** Lease state machine with
   `NONE` as a real transitional owner state, TTL + heartbeat,

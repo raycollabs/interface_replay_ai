@@ -1,0 +1,10 @@
+{
+  "status": "business_outcome",
+  "code": "MEMBER_NOT_FOUND",
+  "stepId": "submit-search",
+  "message": "No member matched the supplied identifier. A legitimate result, not a failure.",
+  "outputs": {
+    "found": "false"
+  },
+  "evidenceRef": "evidence/replay-business-outcome"
+}

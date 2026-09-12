@@ -1,0 +1,7 @@
+{
+  "status": "failure",
+  "code": "INPUT_CONTRACT_VIOLATION",
+  "expected": "runtime inputs matching the capability's declared input schema",
+  "observed": "Input \"memberId\" (value redacted) does not match required pattern ^[0-9]{5}$.",
+  "evidenceRef": "evidence/replay-failure"
+}

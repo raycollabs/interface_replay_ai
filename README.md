@@ -9,10 +9,10 @@ human when it can't safely proceed.
 > The model discovers. The artifact becomes a reusable capability.
 > Deterministic replay is how an AI agent invokes it in production.
 
-Build status: **Slice 2 of 9 complete** (contracts, target app, surface
-adapter + policy). See [`docs/slices.md`](docs/slices.md) for the full plan
-and current progress, and `REPORT.md` (added from Slice 5) for the design
-write-up.
+Build status: **Slice 3 of 9 complete** (contracts, target app, surface
+adapter + policy, deterministic replay engine). See
+[`docs/slices.md`](docs/slices.md) for the full plan and current progress,
+and `REPORT.md` (added from Slice 5) for the design write-up.
 
 ## Setup
 
@@ -82,19 +82,37 @@ associated_label heuristic (the real markup has no label association).
 Screenshot evidence lands in `tmp/` (gitignored dev scratch -- curated
 `/evidence/` directories start with Slice 3's replay engine).
 
-## Demo path (grows per slice)
+## Demo path
 
-Once Slice 3 lands:
+Deterministic replay (no LLM — the CLI prints `llmCalls=0` because there is
+structurally no code path in the replay engine that could make it anything
+else, see `tests/replay/no-llm-import.test.ts`). With the target app
+running in another terminal:
+
 ```bash
-npm run replay -- --capability member.read-savings-balance --version 1 --input memberId=12345
+# Success
+npm run replay -- --capability member.read-savings-balance --version 1 \
+  --input memberId=12345 --evidence-dir evidence/replay-success
+
+# Business outcome -- a legitimate result, not a crash
+npm run replay -- --capability member.read-savings-balance --version 1 \
+  --input memberId=99999 --evidence-dir evidence/replay-business-outcome
+
+# Hard failure -- input rejected before anything touches the surface
+npm run replay -- --capability member.read-savings-balance --version 1 \
+  --input memberId=abc --evidence-dir evidence/replay-failure
 ```
+
+Each writes `run-state.json`, `events.jsonl`, `result.json`, and a
+screenshot into its `--evidence-dir`. `memberId` is declared `sensitive`
+in the artifact; every one of those files is redacted at capture, not
+scrubbed afterward -- verified by grepping the evidence directories for
+the raw value.
 
 Once Slice 6 lands:
 ```bash
 npm run discover -- --goal "Look up member 12345 and read their savings balance" --target local-bank
 ```
-
-Evidence from both discovery and replay runs lands in `/evidence/`.
 
 ## Design write-up
 
