@@ -18,6 +18,7 @@ import type { PolicyContext } from '../policy/allowlist.js';
 import type { TraceEntry } from '../discovery/trace.js';
 import { classifyCapability, type ActedControl, type DeclaredOutputPurpose } from './classify.js';
 import { findColumnLocation } from './tableLookup.js';
+import { canonicalizeRoute } from './canonicalize.js';
 
 export interface DesiredOutput {
   name: string;
@@ -40,7 +41,15 @@ export interface CompileOptions {
   goal: string;
   product: { vendor: string; app: string; versionRange: string };
   baseUrl: string;
-  scope: { allowedOrigins: string[]; allowedRoutes: string[]; allowedActionTypes: CapabilityDefinition['scope']['allowedActionTypes'] };
+  /**
+   * `allowedRoutes` is deliberately absent here -- it's derived, not
+   * declared, from the routes actually visited during the compiler's own
+   * live replay (see canonicalize.ts). A hand-typed route list can drift
+   * from what a capability actually needs (too broad, silently) or
+   * doesn't need (too narrow, breaks on first replay); a derived one
+   * can't drift from reality because it IS reality, observed.
+   */
+  scope: { allowedOrigins: string[]; allowedActionTypes: CapabilityDefinition['scope']['allowedActionTypes'] };
   inputs: Record<string, InputDef>;
   desiredOutputs: DesiredOutput[];
   entryRoute: string;
@@ -80,6 +89,21 @@ export async function compileCapability(opts: CompileOptions): Promise<Capabilit
   try {
     await opts.bootstrapSession(adapter);
     await adapter.performDiscoveryNavigate(opts.entryRoute, opts.policyCtx);
+
+    // Route canonicalization: every route actually visited during this
+    // live replay, reduced to a pattern by replacing any segment that
+    // exactly matches a declared input's value with :inputName.
+    // /login is a fixed baseline (bootstrapSession visits it outside the
+    // capability's own steps, and any capability against this target
+    // needs it) rather than derived.
+    const visitedRoutes = new Set<string>(['/login']);
+    const recordRoute = (url: string) => visitedRoutes.add(canonicalizeRoute(url, opts.compileInputs));
+    const recordFrames = () => {
+      for (const child of page.mainFrame().childFrames()) {
+        if (child.url()) recordRoute(child.url());
+      }
+    };
+    recordRoute(page.url());
 
     const targetRegistry: Record<string, Target> = {};
     const actedControls: ActedControl[] = [];
@@ -152,6 +176,8 @@ export async function compileCapability(opts: CompileOptions): Promise<Capabilit
         // way -- caught for real once already (see the postcondition
         // comment further down), not a precaution added speculatively.
         await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
+        recordRoute(page.url());
+        recordFrames();
       } else {
         const rawValue = input.value ?? '';
         const outcome = await adapter.performDiscoveryType(resolution.locator, rawValue, opts.compileInputs, opts.policyCtx);
@@ -269,9 +295,35 @@ export async function compileCapability(opts: CompileOptions): Promise<Capabilit
       }
     }
 
+    // The classification call can propose a checkpoint purpose that
+    // belonged to an EARLIER page in the flow (e.g. a nav link clicked
+    // two steps ago) rather than the truly final state -- caught for
+    // real: one compile run proposed "accounts navigation" alongside the
+    // output fields, and that link no longer exists on the page the flow
+    // actually ends on, so the checkpoint could never hold. Classification
+    // output is a proposal, not a fact -- verify each proposed purpose is
+    // actually visible on the live final page before trusting it in the
+    // artifact, the same "verify, don't just assert" rule the targeting
+    // ladder already follows. A purpose that fails this check is a
+    // classification error, not a target to include and hope about.
+    const verifiedCheckpointPurposes: SemanticPurpose[] = [];
+    for (const purpose of classification.checkpointPurposes) {
+      const target = targetRegistry[purpose];
+      if (!target) continue;
+      const resolution = await resolveTarget(page, target);
+      if (resolution.outcome === 'resolved' && (await resolution.locator.isVisible().catch(() => false))) {
+        verifiedCheckpointPurposes.push(purpose);
+      }
+    }
+    if (verifiedCheckpointPurposes.length === 0) {
+      throw new Error(
+        `Classification proposed checkpoint purposes (${classification.checkpointPurposes.join(', ')}) but none of them verified as visible on the live final page. Refusing to emit an empty or unverified checkpoint.`,
+      );
+    }
+
     const checkpoint: Condition = {
       type: 'all',
-      conditions: classification.checkpointPurposes.map((p) => ({ type: 'controlVisible', semanticPurpose: p })),
+      conditions: verifiedCheckpointPurposes.map((p) => ({ type: 'controlVisible', semanticPurpose: p })),
     };
 
     // Provenance fingerprint: hash of the sorted (role, name) pairs
@@ -294,7 +346,7 @@ export async function compileCapability(opts: CompileOptions): Promise<Capabilit
       description: opts.goal,
       product: opts.product,
       executionModes: ['ATTENDED', 'UNATTENDED'],
-      scope: opts.scope,
+      scope: { ...opts.scope, allowedRoutes: [...visitedRoutes].sort() },
       inputs: opts.inputs,
       outputs,
       targetRegistry,

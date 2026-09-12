@@ -83,13 +83,20 @@ async function main() {
     { name: 'accountId', type: 'string', description: 'Savings account identifier', columnHeaderHint: 'Account ID', semanticPurpose: 'account identifier field' },
   ];
 
-  const scope = {
-    allowedOrigins: [baseUrl],
-    allowedRoutes: ['/login', '/member-search', '/member/*', '/member/*/accounts', '/member/*/accounts-frame'],
-    allowedActionTypes: ['navigate', 'click', 'type', 'extract'] as const,
-  };
-  const policyCtx: PolicyContext = {
-    allowlist: { ...scope, allowedActionTypes: [...scope.allowedActionTypes], unattendedRiskCeiling: 'safe_reversible' },
+  // The compiler's OWN replay actions during compilation are still
+  // policy-checked (adapter.performDiscoveryNavigate/Click/Type all go
+  // through the same evaluatePolicy() everything else does) -- but the
+  // artifact's own scope.allowedRoutes doesn't exist yet at this point,
+  // it's what compileCapability derives BY replaying. This allowlist is
+  // deliberately broader, administrative, compile-time-only tooling
+  // access; it is never written into the artifact.
+  const compileTimePolicyCtx: PolicyContext = {
+    allowlist: {
+      allowedOrigins: [baseUrl],
+      allowedRoutes: ['/login', '/member-search', '/member/*', '/member/*/accounts', '/member/*/accounts-frame'],
+      allowedActionTypes: ['navigate', 'click', 'type', 'extract'],
+      unattendedRiskCeiling: 'safe_reversible',
+    },
     mode: 'UNATTENDED',
   };
 
@@ -102,12 +109,14 @@ async function main() {
     goal: 'Look up a member by identifier and return their current savings balance.',
     product: { vendor: 'local-legacy-bank-demo', app: 'member-servicing-console', versionRange: '1.x' },
     baseUrl,
-    scope: { ...scope, allowedActionTypes: [...scope.allowedActionTypes] },
+    // The artifact's actual scope: allowedRoutes is deliberately absent
+    // here -- compileCapability derives it from routes actually visited.
+    scope: { allowedOrigins: [baseUrl], allowedActionTypes: ['navigate', 'click', 'type', 'extract'] },
     inputs: { memberId: { type: 'string', required: true, sensitive: true, pattern: '^[0-9]{5}$', example: '12345' } },
     desiredOutputs,
     entryRoute: '/member-search',
     apiKey,
-    policyCtx,
+    policyCtx: compileTimePolicyCtx,
     bootstrapSession: (adapter: PlaywrightSurfaceAdapter) => loginToTargetApp(adapter.getPage(), baseUrl),
     compileInputs: args.replayInput,
     headless: true,
@@ -116,6 +125,7 @@ async function main() {
   writeFileSync(args.output, JSON.stringify(artifact, null, 2) + '\n', 'utf-8');
   console.log(`Wrote ${args.output} (status: ${artifact.status})`);
   console.log(`targetRegistry: ${Object.keys(artifact.targetRegistry).join(', ')}`);
+  console.log(`Derived scope.allowedRoutes (canonicalized, not hand-typed): ${artifact.scope.allowedRoutes.join(', ')}`);
   console.log(`checkpoint purposes: ${JSON.stringify(artifact.checkpoint)}`);
 }
 

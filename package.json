@@ -20,7 +20,8 @@
     "replay:tenant": "tsx scripts/replay-tenant.ts",
     "catalog:demo": "tsx scripts/catalog-demo.ts",
     "inspect": "tsx scripts/inspect-page.ts",
-    "mcp": "tsx scripts/mcp-server.ts"
+    "mcp": "tsx scripts/mcp-server.ts",
+    "stability": "tsx scripts/stability.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

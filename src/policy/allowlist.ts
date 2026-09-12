@@ -20,9 +20,22 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** `*` matches any run of characters within a route/origin pattern. */
+/**
+ * Two pattern styles, both supported: `*` matches any run of characters
+ * (hand-authored artifacts, e.g. `/member/*`), and a `:name` path
+ * segment matches exactly one segment, no slashes (compiler-derived
+ * patterns from canonicalizeRoute, e.g. `/member/:memberId`). Found and
+ * fixed for real: the compiler started emitting `:memberId`-style routes
+ * without this matcher understanding them, which would have made a
+ * compiled artifact's own derived scope fail its own policy check at
+ * replay time -- caught before it shipped, not after.
+ */
 function matchesPattern(value: string, pattern: string): boolean {
-  const regex = new RegExp('^' + pattern.split('*').map(escapeRegex).join('.*') + '$');
+  const regexSource = pattern
+    .split('/')
+    .map((segment) => (segment.startsWith(':') ? '[^/]+' : segment.split('*').map(escapeRegex).join('.*')))
+    .join('/');
+  const regex = new RegExp('^' + regexSource + '$');
   return regex.test(value);
 }
 

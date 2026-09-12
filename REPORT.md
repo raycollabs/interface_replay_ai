@@ -87,7 +87,12 @@ Real defects caught by reading raw evidence rather than trusting a green result,
 
 ## 7. Cuts
 
-Two stretch goals were built rather than left as design-only, since both turned out to be cheap given the schema decisions already made: **multi-tenant resolution** (§4 — `TenantBindingSchema`, `resolveCapability()`, a live cross-tenant replay against a differently-labeled variant) and the **capability catalog** (`src/catalog/index.ts` turns every verified artifact into a tool definition from the same Zod schema that validates it on disk; `npm run catalog:demo` shows Claude discovering and invoking `member.read-savings-balance@2` by name with typed arguments from a plain-language request). The catalog is additionally exposed over genuine MCP (`@modelcontextprotocol/sdk`, real `tools/list`/`tools/call` JSON-RPC over HTTP, `npm run mcp`) rather than only the Anthropic-SDK path — vendor-neutral discovery and invocation, verified with both a browser test UI and raw `curl`.
+Four stretch goals were built rather than left as design-only, since each turned out to be cheap given the schema decisions already made:
+
+- **Multi-tenant resolution** (§4 — `TenantBindingSchema`, `resolveCapability()`, a live cross-tenant replay against a differently-labeled variant).
+- **Capability catalog** (`src/catalog/index.ts` turns every verified artifact into a tool definition from the same Zod schema that validates it on disk), additionally exposed over genuine MCP (`@modelcontextprotocol/sdk`, real `tools/list`/`tools/call` JSON-RPC over HTTP, `npm run mcp`) rather than only the Anthropic-SDK path — vendor-neutral discovery and invocation, verified with both a browser test UI and raw `curl`.
+- **Route canonicalization** — the compiler now derives `scope.allowedRoutes` from routes actually visited during its own live replay (`/member/12345/accounts` → `/member/:memberId/accounts`, by exact-matching path segments against declared input values, not a generic "looks like an ID" heuristic) instead of a hand-typed list. Recompiling with this in place surfaced two real defects before either shipped: the policy route-matcher only understood `*` wildcards, not `:name` segments (fixed in `src/policy/allowlist.ts`, with tests); and classification's checkpoint proposal isn't always confined to the truly final page state (one run proposed a nav-link purpose from two steps earlier, which no longer existed on the final page — fixed by verifying every proposed checkpoint purpose against live state before trusting it, refusing to compile rather than ever emit an empty checkpoint). Full regression chain re-run green after both fixes.
+- **Multi-run stability** (`scripts/stability.ts`) — replays a capability N times, aggregating success rate and per-step rung consistency into a `stable` verdict. Run for real: 5/5 successes, zero rung drift, against `member.read-savings-balance@2`.
 
 Deliberately still not built, and why:
 
@@ -98,4 +103,4 @@ Deliberately still not built, and why:
 - **Desktop adapter** — interface designed to accommodate one (§4), not implemented.
 - **A version-variant layer between capability and tenant binding** — the three-layer model in §4 collapses to two in this build (base capability, tenant binding); a vendor-release variant layer is designed for but not exercised, since one vendor product version was in scope.
 
-Next, in order: multi-run stability scoring on the existing verification harness; bounded single-step assisted repair (schema already reserves the field); a second tenant binding exercising the version-variant layer; production secrets/evidence-retention controls.
+Next, in order: bounded single-step assisted repair (schema already reserves the field); a second tenant binding exercising the version-variant layer; production secrets/evidence-retention controls.

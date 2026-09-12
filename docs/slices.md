@@ -357,3 +357,41 @@ prove the mechanism).
 
   This closes the loop on the brief's own framing for the artifact: "an
   agent-invocable capability."
+
+- [x] **Slice 10 — Route canonicalization + multi-run stability
+  (stretch).** Two more named stretch goals, added on request after
+  confirming what was and wasn't already built:
+
+  **Canonicalization** (`src/compiler/canonicalize.ts`): the compiler now
+  derives `scope.allowedRoutes` from routes actually visited during its
+  own live replay, rather than a hand-typed list — `/member/12345/accounts`
+  becomes `/member/:memberId/accounts` by replacing any path segment that
+  exactly matches a declared input's value (not a generic "looks like an
+  ID" heuristic, an exact-match lookup against the same values the
+  compiler already used to reach that page). Recompiling immediately
+  surfaced a real, structural gap: `evaluatePolicy`'s route matcher only
+  understood `*` glob wildcards, so a `:memberId`-style pattern would
+  have failed its own policy check at replay time — fixed in
+  `src/policy/allowlist.ts` before it ever shipped, with tests
+  confirming `:name` matches exactly one path segment (not a deeper
+  path). A **second** real defect surfaced on the same recompile:
+  classification's checkpoint proposal isn't always confined to the
+  truly final page state — one run proposed a checkpoint including a nav
+  link from two steps earlier, on a page that link no longer exists on,
+  and the artifact failed its own verification replay as a direct
+  result. Fixed by verifying every proposed checkpoint purpose against
+  the live final page before including it (same "verify a proposal,
+  don't just trust it" rule the targeting ladder already follows) —
+  refusing to compile at all if verification leaves zero purposes,
+  rather than ever emitting an empty (trivially-always-true) checkpoint.
+  Full regression chain re-run and green after both fixes: Slice 7's
+  gate (67890), the original discovery input (12345), the Slice 8
+  cross-tenant replay against variant B, and the Slice 9 catalog demo.
+
+  **Multi-run stability** (`scripts/stability.ts`): replays the same
+  capability + input N times, aggregating success rate and per-step rung
+  consistency (a step resolving via more than one candidate rung across
+  otherwise-identical runs is a real drift signal even when every run
+  individually succeeds) into a `stable: boolean` verdict. Run for real:
+  5/5 successes, zero rung drift across every step, ~660ms average per
+  replay against `member.read-savings-balance@2` with `memberId=67890`.

@@ -21,9 +21,9 @@
     "allowedRoutes": [
       "/login",
       "/member-search",
-      "/member/*",
-      "/member/*/accounts",
-      "/member/*/accounts-frame"
+      "/member/:memberId",
+      "/member/:memberId/accounts",
+      "/member/:memberId/accounts-frame"
     ],
     "allowedActionTypes": [
       "navigate",
@@ -259,14 +259,6 @@
       {
         "type": "controlVisible",
         "semanticPurpose": "account balance field"
-      },
-      {
-        "type": "controlVisible",
-        "semanticPurpose": "account currency field"
-      },
-      {
-        "type": "controlVisible",
-        "semanticPurpose": "account identifier field"
       }
     ]
   },
@@ -278,7 +270,7 @@
   "provenance": {
     "discoveryRunId": "evidence/discovery-run",
     "model": "claude-sonnet-5",
-    "recordedAt": "2026-09-12T15:47:53.904Z",
+    "recordedAt": "2026-09-12T17:50:05.660Z",
     "adapter": "playwright-web-adapter@0.1.0",
     "appFingerprint": "d02bc7ada672c8c5"
   }

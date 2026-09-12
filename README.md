@@ -131,6 +131,40 @@ curl -s -X POST http://localhost:4600/mcp \
 Only `v2` (promoted to `verified` in Slice 7) appears in the catalog —
 `v1` is still `draft` and is excluded by `loadCatalog()` on purpose.
 
+## Stretch: route canonicalization
+
+The compiler derives `scope.allowedRoutes` from routes actually visited
+during its own live replay rather than a hand-typed list — recompile and
+see for yourself:
+
+```bash
+npm run compile -- --trace-dir evidence/discovery-run \
+  --capability-id member.read-savings-balance --version 2 \
+  --output capabilities/member.read-savings-balance.v2.json \
+  --replay-input memberId=12345
+```
+
+Look at the printed `Derived scope.allowedRoutes` line, or the
+`scope.allowedRoutes` field in the written JSON: `/member/12345/accounts`
+became `/member/:memberId/accounts` mechanically, not hand-typed.
+Recompiling resets the artifact to `draft` — re-run the verification gate
+and `npm run promote` afterward (see the compiling section above) if you
+want it `verified` again.
+
+## Stretch: multi-run stability
+
+```bash
+npm run stability -- --capability member.read-savings-balance --version 2 \
+  --input memberId=67890 --runs 5 --evidence-dir evidence/stability-v2
+```
+
+Replays the artifact N times and reports success rate plus per-step rung
+consistency — a step resolving via a different candidate strategy across
+otherwise-identical runs is a real drift signal even when every run
+individually succeeds. `evidence/stability-v2/summary.json` has the
+aggregate; `evidence/stability-v2/run-N/` has each individual run's full
+evidence.
+
 ## What's here so far
 
 ```

@@ -43,6 +43,18 @@ describe('evaluatePolicy', () => {
     expect(decision.decision).toBe('allow');
   });
 
+  it('matches compiler-derived :name route patterns -- not just * wildcards', () => {
+    const ctx: PolicyContext = { ...baseCtx, allowlist: { ...baseCtx.allowlist, allowedRoutes: ['/member/:memberId/accounts'] } };
+    const decision = evaluatePolicy({ actionType: 'click', route: '/member/67890/accounts' }, ctx);
+    expect(decision.decision).toBe('allow');
+  });
+
+  it(':name matches exactly one path segment, not a deeper path', () => {
+    const ctx: PolicyContext = { ...baseCtx, allowlist: { ...baseCtx.allowlist, allowedRoutes: ['/member/:memberId'] } };
+    const decision = evaluatePolicy({ actionType: 'click', route: '/member/12345/accounts' }, ctx);
+    expect(decision.decision).toBe('deny');
+  });
+
   it('requires human for risky_irreversible regardless of ceiling, even in ATTENDED mode is fine but UNATTENDED always escalates', () => {
     const decision = evaluatePolicy(
       { actionType: 'click', route: '/member/12345/accounts/new', riskClass: 'risky_irreversible' },

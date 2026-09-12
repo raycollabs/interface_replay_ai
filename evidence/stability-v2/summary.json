@@ -1,0 +1,38 @@
+{
+  "capabilityId": "member.read-savings-balance",
+  "version": 2,
+  "runs": 5,
+  "successRate": 1,
+  "avgDurationMs": 659,
+  "minDurationMs": 622,
+  "maxDurationMs": 729,
+  "driftingSteps": [],
+  "stable": true,
+  "perRun": [
+    {
+      "run": 1,
+      "status": "success",
+      "durationMs": 729
+    },
+    {
+      "run": 2,
+      "status": "success",
+      "durationMs": 661
+    },
+    {
+      "run": 3,
+      "status": "success",
+      "durationMs": 646
+    },
+    {
+      "run": 4,
+      "status": "success",
+      "durationMs": 635
+    },
+    {
+      "run": 5,
+      "status": "success",
+      "durationMs": 622
+    }
+  ]
+}
