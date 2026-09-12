@@ -45,7 +45,21 @@ faith. Three ways to do that, cheapest first.
 
 Every `npm run replay` / `discover` / `compile` / `catalog:demo` command
 writes a real screenshot into its `--evidence-dir`. Just open the PNG
-files under `/evidence/*/`.
+files under `/evidence/*/`. A screenshot lands on every terminal path --
+`success`/`business-outcome`/`failure`/`session-lost`/`needs-human`, plus
+a fresh one specifically for a resume timing out (`escalation-unavailable.png`,
+distinct from `needs-human.png`'s snapshot at the *original* trigger,
+which can be stale by the time a timeout fires).
+
+`events.jsonl` in the same directory is the structured "what and why"
+log: every `ACTION_STARTED` entry carries the step's own declared
+`intent` (its human-readable purpose, straight from the artifact --
+e.g. `"Permanently close the account -- the flow's point of no return"`),
+so the log explains itself without needing the artifact file open
+alongside it. A business outcome (`BUSINESS_OUTCOME_DETECTED`) carries
+both its `code` and human-readable `message`; a recovered interstitial
+(`RECOVERY_ATTEMPTED`) names which one (`matchedPurpose`), not just how
+it was handled.
 
 ### 2. Browse the target app yourself, live, in your own browser
 

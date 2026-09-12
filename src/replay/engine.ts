@@ -250,6 +250,35 @@ export class ReplayRun {
   }
 
   /**
+   * The single business-outcome return path -- five call sites in run()
+   * and regroundAfterResume() detect a business outcome (precondition
+   * check, post-action check, after interstitial recovery, postcondition
+   * timeout, and after a human resume), and this is what all five now
+   * call instead of duplicating "emit, screenshot, finish" five times.
+   *
+   * 3.5 gap closure: found by grepping for every `status: 'business_outcome'`
+   * construction after adding an emit call to only ONE of them and
+   * live-verifying the others -- three of five sites never emitted
+   * BUSINESS_OUTCOME_DETECTED at all, and a fourth carried `code` but not
+   * `message` (the human-readable "why"). A structured log with holes at
+   * three of five call sites for the same event is exactly the kind of
+   * inconsistency a single shared method eliminates by construction,
+   * rather than trusting five separate authors (or five separate edits)
+   * to remember it -- the same reasoning escalate() above is built on.
+   */
+  private async returnBusinessOutcome(
+    bo: { code: string; message: string; outputs?: Record<string, unknown> },
+    stepId: string,
+  ): Promise<ExecutionResult> {
+    this.emit('BUSINESS_OUTCOME_DETECTED', stepId, { code: bo.code, message: bo.message });
+    await this.screenshot('business-outcome');
+    return this.finish(
+      { status: 'business_outcome', code: bo.code, stepId, message: bo.message, outputs: bo.outputs, evidenceRef: this.opts.evidenceDir },
+      'BUSINESS_OUTCOME',
+    );
+  }
+
+  /**
    * The single escalation path -- all three "we can't safely proceed"
    * sites in run() below call this instead of duplicating the
    * suspend/notify/wait logic three times. Ownership sequence:
@@ -310,6 +339,14 @@ export class ReplayRun {
     const resolved = await waitForResolution(evidenceDir, this.opts.resumeTimeoutMs ?? 10 * 60_000);
 
     if (!resolved) {
+      // 3.5 gap closure: 'needs-human.png' (captured above, at the moment
+      // escalation was first requested) can be arbitrarily stale by the
+      // time a resume timeout fires -- the whole POINT of this failure is
+      // that time passed with nobody acting. A fresh screenshot captures
+      // whatever state the page is ACTUALLY in when automation gives up,
+      // which is what a debugger investigating "why didn't anyone show
+      // up" needs, not a snapshot from minutes or hours earlier.
+      await this.screenshot('escalation-unavailable');
       const result = await this.finish(
         {
           status: 'failure',
@@ -385,11 +422,7 @@ export class ReplayRun {
 
     const bo = await detectBusinessOutcome(page, this.capability, this.inputs);
     if (bo) {
-      await this.screenshot('business-outcome');
-      const result = await this.finish(
-        { status: 'business_outcome', code: bo.code, stepId: step.stepId, message: bo.message, outputs: bo.outputs, evidenceRef: evidenceDir },
-        'BUSINESS_OUTCOME',
-      );
+      const result = await this.returnBusinessOutcome(bo, step.stepId);
       return { ok: false, result };
     }
 
@@ -471,21 +504,7 @@ export class ReplayRun {
             );
           }
           const bo = await detectBusinessOutcome(page, this.capability, this.inputs);
-          if (bo) {
-            this.emit('BUSINESS_OUTCOME_DETECTED', step.stepId, { code: bo.code });
-            await this.screenshot('business-outcome');
-            return this.finish(
-              {
-                status: 'business_outcome',
-                code: bo.code,
-                stepId: step.stepId,
-                message: bo.message,
-                outputs: bo.outputs,
-                evidenceRef: evidenceDir,
-              },
-              'BUSINESS_OUTCOME',
-            );
-          }
+          if (bo) return this.returnBusinessOutcome(bo, step.stepId);
           await this.screenshot('failure');
           return this.finish(
             {
@@ -501,7 +520,14 @@ export class ReplayRun {
         }
       }
 
-      this.emit('ACTION_STARTED', step.stepId, { action: step.action });
+      // 3.5 gap closure: `step.intent` is the artifact's own declared
+      // human-readable "why" for this step -- exactly the "and why" half
+      // of "a structured log of what the agent did and why" -- but was
+      // never actually included in the event stream itself, only in
+      // escalate()'s one-off explanation string. A debugger reading
+      // events.jsonl in isolation now sees the reason a step exists, not
+      // just its stepId and action type.
+      this.emit('ACTION_STARTED', step.stepId, { action: step.action, intent: step.intent });
       const outcome = await this.adapter.perform(step, this.capability, this.inputs, this.policyCtx);
 
       if (outcome.kind === 'policy_denied') {
@@ -549,28 +575,20 @@ export class ReplayRun {
         );
       }
       let bo = await detectBusinessOutcome(page, this.capability, this.inputs);
-      if (bo) {
-        this.emit('BUSINESS_OUTCOME_DETECTED', step.stepId, { code: bo.code });
-        await this.screenshot('business-outcome');
-        return this.finish(
-          {
-            status: 'business_outcome',
-            code: bo.code,
-            stepId: step.stepId,
-            message: bo.message,
-            outputs: bo.outputs,
-            evidenceRef: evidenceDir,
-          },
-          'BUSINESS_OUTCOME',
-        );
-      }
+      if (bo) return this.returnBusinessOutcome(bo, step.stepId);
 
       // A currently-present declared interstitial gets bounded recovery
       // before we decide anything else failed.
       for (const interstitial of this.capability.interstitials) {
         const present = await checkCondition(page, interstitial.match, this.capability.targetRegistry, this.inputs);
         if (!present) continue;
-        this.emit('RECOVERY_ATTEMPTED', step.stepId, { handle: interstitial.handle });
+        // 3.5 gap closure: name WHICH interstitial fired, not just how it
+        // was handled -- "RECOVERY_ATTEMPTED {handle:'dismiss'}" alone
+        // doesn't tell a debugger what was actually on screen.
+        this.emit('RECOVERY_ATTEMPTED', step.stepId, {
+          handle: interstitial.handle,
+          matchedPurpose: 'semanticPurpose' in interstitial.match ? interstitial.match.semanticPurpose : undefined,
+        });
         const recovered = await handleInterstitial(page, interstitial, this.capability, this.inputs, this.adapter, this.policyCtx);
         if (!recovered) {
           if (step.onBlock === 'escalate') {
@@ -602,13 +620,7 @@ export class ReplayRun {
           );
         }
         bo = await detectBusinessOutcome(page, this.capability, this.inputs);
-        if (bo) {
-          await this.screenshot('business-outcome');
-          return this.finish(
-            { status: 'business_outcome', code: bo.code, stepId: step.stepId, message: bo.message, outputs: bo.outputs, evidenceRef: evidenceDir },
-            'BUSINESS_OUTCOME',
-          );
-        }
+        if (bo) return this.returnBusinessOutcome(bo, step.stepId);
       }
 
       if (outcome.kind !== 'executed') {
@@ -646,13 +658,7 @@ export class ReplayRun {
             );
           }
           const bo2 = await detectBusinessOutcome(page, this.capability, this.inputs);
-          if (bo2) {
-            await this.screenshot('business-outcome');
-            return this.finish(
-              { status: 'business_outcome', code: bo2.code, stepId: step.stepId, message: bo2.message, outputs: bo2.outputs, evidenceRef: evidenceDir },
-              'BUSINESS_OUTCOME',
-            );
-          }
+          if (bo2) return this.returnBusinessOutcome(bo2, step.stepId);
           if (step.onBlock === 'escalate') {
             const escalation = await this.escalate(step, 'POSTCONDITION_UNMET');
             if (!escalation.resume) return escalation.result;

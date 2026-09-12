@@ -1,9 +1,11 @@
 {
   "status": "success",
   "outputs": {
-    "accountId": "SAV-51190",
-    "balance": "812.40",
-    "currency": "USD"
+    "account": {
+      "accountId": "SAV-51190",
+      "balance": "812.40",
+      "currency": "USD"
+    }
   },
   "evidenceRef": "evidence/replay-recovered-dialog"
 }

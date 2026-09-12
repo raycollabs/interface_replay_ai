@@ -152,6 +152,50 @@ prove the mechanism).
   Slice 3; `needs_human` follows in Slice 5, once there's a human to hand
   off to.
 
+  **Two gaps closed on review**, requirement 3.5 ("a structured log of
+  what the agent did and why, and at least one richer signal on
+  failure"):
+
+  1. **The log recorded "what," rarely "why."** `ACTION_STARTED` only
+     ever carried `{action: step.action}` -- a reader would have to open
+     the artifact file and look up the stepId to learn what a step was
+     *for*, even though `CapabilityStep.intent` (a human-readable field
+     that exists specifically for reviewability) was sitting right there
+     unused. Worse, checking every place a `business_outcome` result gets
+     constructed found three of five call sites -- after a human resume,
+     after interstitial recovery, on postcondition timeout -- never
+     emitted `BUSINESS_OUTCOME_DETECTED` at all, and a fourth carried
+     `code` but not the outcome's human-readable `message`. Fixed by
+     adding `intent` to `ACTION_STARTED`, `matchedPurpose` to
+     `RECOVERY_ATTEMPTED` (which interstitial fired, not just how it was
+     handled), and consolidating all five business-outcome sites into one
+     `returnBusinessOutcome()` method -- the same "one shared method, not
+     N duplicated copies" discipline `escalate()` already followed,
+     applied here specifically because duplicated logic is exactly how
+     three of five sites silently drifted out of sync with the other two.
+  2. **`ESCALATION_UNAVAILABLE` (a resume timing out) had zero fresh
+     evidence of its own.** The only screenshot on file for this failure
+     was `needs-human.png`, captured whenever escalation was *first*
+     requested -- potentially stale by however long the timeout waited.
+     Fixed with a screenshot taken at the actual moment of that failure.
+     Live-verified with a 3-second resume timeout against member `33333`:
+     both `needs-human.png` (the original trigger) and
+     `escalation-unavailable.png` (the state when automation gave up) now
+     exist side by side.
+
+  Live-verified afterward: happy path (`12345`) shows `intent` on every
+  `ACTION_STARTED`; the dialog interstitial (`44444`) shows
+  `matchedPurpose: "unknown dialog dismiss"`; all three business-outcome
+  scenarios from the 3.3 gap closure (`MEMBER_NOT_FOUND`,
+  `VALIDATION_ERROR`, `PERMISSION_DENIED`) now emit
+  `BUSINESS_OUTCOME_DETECTED` with both `code` and `message`, from three
+  different call sites (precondition check, post-action check, and the
+  `open-accounts` postcondition path respectively) -- proof the
+  consolidation actually reaches every path, not just the one that was
+  manually patched first. 72/72 unit tests green throughout; full
+  regression across every pre-existing member scenario plus the verified
+  `v2` artifact, unchanged. Redaction re-verified clean.
+
 - [x] **Slice 4 — Recoverable conditions.** Added two member-scoped
   fixtures to the target app: `44444` shows an unexpected "notice" dialog
   once per session (withholds the real accounts page until a `<button>
