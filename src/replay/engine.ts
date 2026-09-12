@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Page } from 'playwright';
 import type {
   CapabilityDefinition,
+  CapabilityStep,
   ExecutionResult,
   FailureCode,
   RunEvent,
@@ -50,29 +51,59 @@ async function detectBusinessOutcome(
   return null;
 }
 
-/** Bounded, declared recovery for a currently-present interstitial.
- *  Returns true if the interstitial condition no longer holds afterward. */
+/**
+ * Bounded, declared recovery for a currently-present interstitial. Both
+ * 'dismiss' and 'retry' act on the live surface through a SYNTHETIC step
+ * routed via adapter.perform() -- the engine's own recovery logic has no
+ * shortcut that bypasses the policy check any other action would go
+ * through. Returns true if the interstitial condition no longer holds
+ * afterward.
+ */
 async function handleInterstitial(
   page: Page,
   interstitial: CapabilityDefinition['interstitials'][number],
-  targetRegistry: CapabilityDefinition['targetRegistry'],
+  capability: CapabilityDefinition,
   inputs: Record<string, unknown>,
+  adapter: PlaywrightSurfaceAdapter,
+  policyCtx: PolicyContext,
 ): Promise<boolean> {
   if (interstitial.handle === 'escalate') return false; // no auto-recovery attempted by design
 
   for (let attempt = 0; attempt < interstitial.maxAttempts; attempt++) {
     if (interstitial.handle === 'dismiss') {
-      await page.keyboard.press('Escape').catch(() => {});
+      if (!interstitial.dismissTargetPurpose) return false;
+      const syntheticStep: CapabilityStep = {
+        stepId: '__interstitial_dismiss__',
+        intent: 'Dismiss a known interstitial',
+        action: 'click',
+        targetPurpose: interstitial.dismissTargetPurpose,
+        riskClass: 'safe_reversible',
+        onBlock: 'fail',
+        timeoutMs: 3000,
+      };
+      const outcome = await adapter.perform(syntheticStep, capability, inputs, policyCtx);
+      if (outcome.kind !== 'executed') return false;
     } else if (interstitial.handle === 'retry') {
-      await page.reload({ waitUntil: 'domcontentloaded' }).catch(() => {});
+      const route = new URL(page.url()).pathname;
+      const syntheticStep: CapabilityStep = {
+        stepId: '__interstitial_retry__',
+        intent: 'Retry loading the current route',
+        action: 'navigate',
+        value: { literal: route },
+        riskClass: 'read_only',
+        onBlock: 'fail',
+        timeoutMs: 8000,
+      };
+      const outcome = await adapter.perform(syntheticStep, capability, inputs, policyCtx);
+      if (outcome.kind !== 'executed') return false;
     } else if (interstitial.handle === 'reauth') {
-      // Not implemented until Slice 4/5 add a real reauth flow to the
-      // target app and a credential-refresh path. Declared now for
+      // Not implemented until Slice 5 adds a real reauth flow and a
+      // credential-refresh path via SessionBroker. Declared now for
       // schema completeness; deliberately a no-op that reports
       // "still present" rather than pretending to succeed.
       return false;
     }
-    const stillPresent = await checkCondition(page, interstitial.match, targetRegistry, inputs);
+    const stillPresent = await checkCondition(page, interstitial.match, capability.targetRegistry, inputs);
     if (!stillPresent) return true;
   }
   return false;
@@ -300,7 +331,7 @@ export class ReplayRun {
         const present = await checkCondition(page, interstitial.match, this.capability.targetRegistry, this.inputs);
         if (!present) continue;
         this.emit('RECOVERY_ATTEMPTED', step.stepId, { handle: interstitial.handle });
-        const recovered = await handleInterstitial(page, interstitial, this.capability.targetRegistry, this.inputs);
+        const recovered = await handleInterstitial(page, interstitial, this.capability, this.inputs, this.adapter, this.policyCtx);
         if (!recovered) {
           if (step.onBlock === 'escalate') {
             const interventionId = randomUUID();

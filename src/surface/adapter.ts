@@ -126,9 +126,27 @@ export class PlaywrightSurfaceAdapter {
     }
 
     switch (step.action) {
-      case 'click':
+      case 'click': {
+        const urlBefore = page.url();
         await resolution.locator.click();
+        // A click can trigger a same-page action's OWN navigation (a form
+        // submit, a redirect) that the engine never explicitly requested
+        // as a 'navigate' step and therefore never policy-checked as one.
+        // Best-effort safety net: if the click caused navigation, check
+        // the resulting route against the allowlist too -- this can't
+        // undo the click, but it stops the run from continuing to act on
+        // a page outside scope (e.g. a hijacked/injected redirect target).
+        const urlAfter = page.url();
+        if (urlAfter !== urlBefore) {
+          const decision = evaluatePolicy(
+            { actionType: 'navigate', targetUrl: urlAfter, route: new URL(urlAfter).pathname, riskClass: step.riskClass },
+            policyCtx,
+          );
+          if (decision.decision === 'deny') return { kind: 'policy_denied', reason: `post-click navigation: ${decision.reason}` };
+          if (decision.decision === 'require_human') return { kind: 'require_human', reason: `post-click navigation: ${decision.reason}` };
+        }
         return { kind: 'executed', matchedRung: resolution.matchedRung };
+      }
       case 'type': {
         const rawValue = resolveValue(step, inputs);
         const value = substitutePlaceholders(rawValue, inputs);

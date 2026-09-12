@@ -116,3 +116,33 @@ export function accountsFramePartial(
 </table>
 </body></html>`;
 }
+
+/**
+ * The "unexpected confirmation dialog" recoverable case (Slice 4). Renders
+ * in place of the real accounts page until the member's dialog has been
+ * acknowledged once for this session.
+ */
+export function unknownDialogPage(memberId: string): string {
+  return pageShell(
+    `Accounts — Member ${memberId}`,
+    `
+    <div role="alertdialog" aria-label="Notice" class="banner-info">
+      <p>An unexpected notice requires acknowledgement before continuing.</p>
+      <form method="post" action="/member/${memberId}/acknowledge">
+        <button type="submit">Continue</button>
+      </form>
+    </div>
+  `,
+  );
+}
+
+/**
+ * The "transient slow load, recovered by retry" case (Slice 4). Served
+ * once per session in place of the real accounts-frame table.
+ */
+export function loadingPartial(): string {
+  return `<!doctype html>
+<html><head><style>${STYLE}</style></head><body>
+<div role="status" class="banner-info">Loading account data, please wait...</div>
+</body></html>`;
+}

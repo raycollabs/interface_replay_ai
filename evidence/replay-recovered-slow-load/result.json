@@ -1,0 +1,9 @@
+{
+  "status": "success",
+  "outputs": {
+    "accountId": "SAV-30456",
+    "balance": "15920.11",
+    "currency": "USD"
+  },
+  "evidenceRef": "evidence/replay-recovered-slow-load"
+}

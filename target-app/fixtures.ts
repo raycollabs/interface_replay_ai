@@ -25,6 +25,26 @@ export const MEMBERS: Record<string, Member> = {
       { accountType: 'Savings', accountId: 'SAV-88213', balance: '4235.67', currency: 'USD' },
     ],
   },
+  // Slice 4: recoverable conditions. 44444's accounts page shows an
+  // unexpected notice that must be dismissed once per session before the
+  // real content renders -- the "unexpected confirmation dialog" case.
+  '44444': {
+    memberId: '44444',
+    name: 'Priya Nakamura',
+    accounts: [
+      { accountType: 'Savings', accountId: 'SAV-51190', balance: '812.40', currency: 'USD' },
+    ],
+  },
+  // 55555's accounts-frame returns a "loading" placeholder on the first
+  // request per session and the real table from the second request on --
+  // the "transient slow load, recovered by retry" case.
+  '55555': {
+    memberId: '55555',
+    name: 'Owen Fitzgerald',
+    accounts: [
+      { accountType: 'Savings', accountId: 'SAV-30456', balance: '15920.11', currency: 'USD' },
+    ],
+  },
 };
 
 /** Synthetic operator credential for the demo login form. Not a real secret. */

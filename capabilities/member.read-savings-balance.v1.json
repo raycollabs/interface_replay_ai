@@ -13,7 +13,7 @@
   "executionModes": ["ATTENDED", "UNATTENDED"],
   "scope": {
     "allowedOrigins": ["http://localhost:4173"],
-    "allowedRoutes": ["/login", "/member-search", "/member/*", "/member/*/accounts", "/member/*/accounts-frame"],
+    "allowedRoutes": ["/login", "/member-search", "/member/*", "/member/*/accounts", "/member/*/accounts-frame", "/member/*/acknowledge"],
     "allowedActionTypes": ["navigate", "click", "type", "extract", "wait", "assert"]
   },
   "inputs": {
@@ -140,8 +140,32 @@
       "candidates": [
         {
           "strategy": { "type": "role_and_name", "role": "dialog", "name": "Session Expiring", "exact": false },
-          "rationale": "Placeholder pending Slice 4, which adds the session-timeout interstitial to the target app. Declared now for schema/referential completeness since this capability's interstitials[] already references it.",
+          "rationale": "Placeholder pending Slice 5, which adds a real reauth flow via SessionBroker. Declared now for schema/referential completeness since this capability's interstitials[] already references it; the engine's reauth handler is a deliberate no-op until then.",
           "confidence": "low"
+        }
+      ]
+    },
+    "unknown dialog dismiss": {
+      "semanticPurpose": "unknown dialog dismiss",
+      "framePath": [],
+      "recordedRung": 2,
+      "candidates": [
+        {
+          "strategy": { "type": "role_and_name", "role": "button", "name": "Continue", "exact": true },
+          "rationale": "The dialog's own acknowledgement control; its visibility both detects the interstitial and is what gets clicked to dismiss it -- no separate detection target needed.",
+          "confidence": "high"
+        }
+      ]
+    },
+    "account data loading banner": {
+      "semanticPurpose": "account data loading banner",
+      "framePath": ["accounts-frame"],
+      "recordedRung": 2,
+      "candidates": [
+        {
+          "strategy": { "type": "role_and_name", "role": "status", "name": "", "exact": false },
+          "rationale": "Rendered as role=status inside the accounts-frame iframe in place of the real table on first load.",
+          "confidence": "high"
         }
       ]
     }
@@ -160,6 +184,17 @@
       "match": { "type": "controlVisible", "semanticPurpose": "session reauth prompt" },
       "handle": "reauth",
       "maxAttempts": 1
+    },
+    {
+      "match": { "type": "controlVisible", "semanticPurpose": "unknown dialog dismiss" },
+      "handle": "dismiss",
+      "dismissTargetPurpose": "unknown dialog dismiss",
+      "maxAttempts": 1
+    },
+    {
+      "match": { "type": "controlVisible", "semanticPurpose": "account data loading banner" },
+      "handle": "retry",
+      "maxAttempts": 2
     }
   ],
   "steps": [

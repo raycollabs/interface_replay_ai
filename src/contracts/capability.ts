@@ -96,6 +96,15 @@ export type KnownOutcome = z.infer<typeof KnownOutcomeSchema>;
 export const InterstitialSchema = z.object({
   match: ConditionSchema,
   handle: z.enum(['dismiss', 'retry', 'reauth', 'escalate']),
+  /**
+   * Required when handle === 'dismiss': which registered control to click
+   * to close the interstitial. The recovery click is routed through
+   * SurfaceAdapter.perform() as a synthetic step (see
+   * src/replay/engine.ts's handleInterstitial), the same as any other
+   * action -- there is no internal shortcut that skips the policy check,
+   * even for the engine's own recovery logic.
+   */
+  dismissTargetPurpose: SemanticPurposeSchema.optional(),
   maxAttempts: z.number().int().positive().default(1),
 });
 export type Interstitial = z.infer<typeof InterstitialSchema>;
@@ -270,6 +279,7 @@ export function collectReferencedPurposes(capability: CapabilityDefinition): Set
   }
   for (const interstitial of capability.interstitials) {
     collectPurposesFromCondition(interstitial.match, purposes);
+    if (interstitial.dismissTargetPurpose) purposes.add(interstitial.dismissTargetPurpose);
   }
   return purposes;
 }

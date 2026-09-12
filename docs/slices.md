@@ -93,13 +93,49 @@ prove the mechanism).
   Slice 3; `needs_human` follows in Slice 5, once there's a human to hand
   off to.
 
-- [ ] **Slice 4 — Recoverable conditions.** With business outcome and
-  hard-failure classification already proven in Slice 3, this slice is
-  narrower than originally scoped: add a slow-loading route and an
-  unknown-dialog route to the target app, and prove the bounded
-  interstitial-recovery path in `ReplayRun` (already implemented
-  structurally, not yet exercised by real data) actually recovers —
-  `evidence/replay-recovered/`.
+- [x] **Slice 4 — Recoverable conditions.** Added two member-scoped
+  fixtures to the target app: `44444` shows an unexpected "notice" dialog
+  once per session (withholds the real accounts page until a `<button>
+  Continue</button>` is clicked); `55555`'s accounts-frame iframe serves
+  a `role="status"` loading placeholder on the first request per session
+  and the real table from the second request on. Two new interstitials
+  declared on the capability (`unknown dialog dismiss` -> `dismiss`,
+  `account data loading banner` -> `retry`), each with real
+  `targetRegistry` entries, not placeholders.
+
+  Two design fixes surfaced while wiring this up, both closing real gaps
+  rather than working around them:
+  - `handleInterstitial`'s dismiss/retry actions were going to route
+    straight through Playwright (`page.keyboard.press`, `page.reload`),
+    bypassing the policy check every other action goes through. Fixed by
+    routing both through `adapter.perform()` as synthetic steps — the
+    engine's own recovery logic gets no exception to "no path to the
+    surface skips policy." Added `Interstitial.dismissTargetPurpose` to
+    the schema so `dismiss` has something declared to click.
+  - A click can trigger its own navigation (a form submit) that was never
+    explicitly requested as a `navigate` step and so was never
+    policy-checked as one. Added a post-click check in
+    `PlaywrightSurfaceAdapter`: if the URL changed after a click, the
+    resulting route is checked against the allowlist too — a best-effort
+    safety net against a hijacked or unexpectedly-redirecting control
+    (the concrete form the prompt-injection containment argument takes).
+  - Caught by inspecting the RAW evidence, not by a passing test: both
+    new fixture gates were initially unscoped ("any member not yet
+    acknowledged" instead of "member 44444 specifically"), so *every*
+    member's first load hit *both* interstitials. The runs still
+    "succeeded" because generic recovery papered over it — exactly the
+    failure mode "read the evidence, don't trust the green checkmark"
+    exists to catch. Fixed by scoping each gate to its one member ID;
+    re-verified the happy path is now genuinely interstitial-free
+    (`grep -c RECOVERY_ATTEMPTED` = 0) while 44444/55555 each fire
+    exactly their own recovery once.
+
+  Gate: `evidence/replay-recovered-dialog/` and
+  `evidence/replay-recovered-slow-load/`, both `status: success` with the
+  correct member-specific outputs, each showing exactly one
+  `RECOVERY_ATTEMPTED` event of the right kind. Redaction re-verified by
+  grep across all five evidence directories for all four member IDs used
+  so far — no leaks.
 
 - [ ] **Slice 5 — Session broker + handoff.** Lease state machine with
   `NONE` as a real transitional owner state, TTL + heartbeat,

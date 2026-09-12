@@ -9,13 +9,20 @@ import {
   memberDetailPage,
   accountsPage,
   accountsFramePartial,
+  unknownDialogPage,
+  loadingPartial,
 } from './templates.js';
 
 const PORT = Number(process.env.PORT ?? 4173);
 
 // In-memory session store — this is a throwaway target-app fixture, not
 // production auth. Sessions are keyed by an opaque cookie value.
-const sessions = new Map<string, { authenticated: boolean }>();
+// acknowledgedDialogs / slowLoadServed back the two Slice 4 recoverable-
+// condition fixtures: once-per-session state, not per-request.
+const sessions = new Map<
+  string,
+  { authenticated: boolean; acknowledgedDialogs: Set<string>; slowLoadServed: Set<string> }
+>();
 
 const app = express();
 app.use(cookieParser());
@@ -40,7 +47,7 @@ app.post('/login', (req, res) => {
   const { username, password } = req.body ?? {};
   if (username === OPERATOR_CREDENTIALS.username && password === OPERATOR_CREDENTIALS.password) {
     const sid = randomUUID();
-    sessions.set(sid, { authenticated: true });
+    sessions.set(sid, { authenticated: true, acknowledgedDialogs: new Set(), slowLoadServed: new Set() });
     res.cookie('sid', sid, { httpOnly: true, sameSite: 'lax' });
     return res.redirect('/member-search');
   }
@@ -69,11 +76,36 @@ app.get('/member/:memberId', requireAuth, (req, res) => {
   res.send(memberDetailPage(member.memberId, member.name));
 });
 
+// Only member 44444 has the unexpected-dialog fixture. Scoping the gate
+// to this one ID (not "any member not yet acknowledged") is what keeps
+// 12345's happy path an actual zero-interstitial happy path.
+const DIALOG_GATED_MEMBER_ID = '44444';
+
 app.get('/member/:memberId/accounts', requireAuth, (req, res) => {
   const member = MEMBERS[req.params.memberId];
   if (!member) return res.status(404).send(memberNotFoundPage(req.params.memberId));
+
+  // Slice 4: the unexpected-dialog case. Shown once per session for this
+  // one member; the real accounts content is withheld until acknowledged.
+  const sid = req.cookies?.sid;
+  const session = sid ? sessions.get(sid) : undefined;
+  if (session && member.memberId === DIALOG_GATED_MEMBER_ID && !session.acknowledgedDialogs.has(member.memberId)) {
+    return res.send(unknownDialogPage(member.memberId));
+  }
+
   res.send(accountsPage(member.memberId));
 });
+
+app.post('/member/:memberId/acknowledge', requireAuth, (req, res) => {
+  const sid = req.cookies?.sid;
+  const session = sid ? sessions.get(sid) : undefined;
+  session?.acknowledgedDialogs.add(req.params.memberId);
+  res.redirect(`/member/${encodeURIComponent(req.params.memberId)}/accounts`);
+});
+
+// Only member 55555 has the slow-load fixture -- same reasoning as
+// DIALOG_GATED_MEMBER_ID above.
+const SLOW_LOAD_MEMBER_ID = '55555';
 
 // Loaded inside the accounts page's <iframe> — the one deliberately hostile
 // frame-traversal case: the balance/currency/account-id fields only exist
@@ -82,6 +114,18 @@ app.get('/member/:memberId/accounts', requireAuth, (req, res) => {
 app.get('/member/:memberId/accounts-frame', requireAuth, (req, res) => {
   const member = MEMBERS[req.params.memberId];
   if (!member) return res.status(404).send(memberNotFoundPage(req.params.memberId));
+
+  // Slice 4: the transient-slow-load case. First request per session for
+  // this one member gets a loading placeholder instead of the real
+  // table; every request after that (and every other member) gets the
+  // real data straight away.
+  const sid = req.cookies?.sid;
+  const session = sid ? sessions.get(sid) : undefined;
+  if (session && member.memberId === SLOW_LOAD_MEMBER_ID && !session.slowLoadServed.has(member.memberId)) {
+    session.slowLoadServed.add(member.memberId);
+    return res.send(loadingPartial());
+  }
+
   res.send(accountsFramePartial(member.accounts));
 });
 

@@ -9,8 +9,8 @@ human when it can't safely proceed.
 > The model discovers. The artifact becomes a reusable capability.
 > Deterministic replay is how an AI agent invokes it in production.
 
-Build status: **Slice 3 of 9 complete** (contracts, target app, surface
-adapter + policy, deterministic replay engine). See
+Build status: **Slice 4 of 9 complete** (contracts, target app, surface
+adapter + policy, deterministic replay engine, recoverable conditions). See
 [`docs/slices.md`](docs/slices.md) for the full plan and current progress,
 and `REPORT.md` (added from Slice 5) for the design write-up.
 
@@ -101,6 +101,14 @@ npm run replay -- --capability member.read-savings-balance --version 1 \
 # Hard failure -- input rejected before anything touches the surface
 npm run replay -- --capability member.read-savings-balance --version 1 \
   --input memberId=abc --evidence-dir evidence/replay-failure
+
+# Recoverable: an unexpected dialog, dismissed automatically once
+npm run replay -- --capability member.read-savings-balance --version 1 \
+  --input memberId=44444 --evidence-dir evidence/replay-recovered-dialog
+
+# Recoverable: a transient slow load, recovered by retry
+npm run replay -- --capability member.read-savings-balance --version 1 \
+  --input memberId=55555 --evidence-dir evidence/replay-recovered-slow-load
 ```
 
 Each writes `run-state.json`, `events.jsonl`, `result.json`, and a
