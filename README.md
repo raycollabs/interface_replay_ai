@@ -18,28 +18,137 @@ ask/status/evidence mapping (§3.1–3.7), and
 [`ARCHITECTURAL_DECISIONS.md`](ARCHITECTURAL_DECISIONS.md) for the
 defense of every explicitly-our-call choice (§4).
 
-**Running without an API key:** `npm run build`, `npm test`,
-`npm run validate:artifacts`, the target app, and every `npm run replay`
-/ `npm run smoke:adapter` / `npm run operator` command below work with
-only the local target app running — no internet access or API key
-needed. Only `npm run discover` and `npm run compile` call the Anthropic
-API and need `ANTHROPIC_API_KEY`.
+## Setup
 
-## The end-to-end thread (start here)
+Requires Node.js 20+.
 
-Everything below this point is organized by feature/slice. This section
-is the opposite cut: one continuous, reproducible path from a goal to a
-finished, escalation-capable capability, with real evidence at every
-stage — the specific thing §5 of the brief asks for ("a working thread
-that runs all the way through"), told as one story instead of assembled
-by the reader from separate demo sections.
+```bash
+npm install
+npm run build              # type-check + compile
+npm test                   # contract schema tests
+npm run validate:artifacts # validate every artifact in /capabilities against the schema
+npm run emit:jsonschema    # regenerate capabilities/schema.json from the Zod source of truth
+```
+
+**Keys/config needed:** exactly one — `ANTHROPIC_API_KEY`. Copy
+`.env.example` to `.env` and set it there. Nothing else in this repo
+needs a key, a database, or any external service.
+
+**Running without live services.** Everything below works against the
+local target app with **no internet access and no API key** *except* the
+two commands that must call a real LLM (`npm run discover`,
+`npm run compile`) — those are the one part of this project the brief
+itself says can't be mocked. Concretely: `npm run build`, `npm test`,
+`npm run validate:artifacts`, the target app itself, and every
+`npm run replay` / `npm run smoke:adapter` / `npm run operator` /
+`npm run stability` / `npm run promote` command in this README run fully
+offline once `npm install` has completed, using only artifacts already
+committed in `/capabilities`. Start the target app first, in its own
+terminal, before any of those:
+
+```bash
+npm run target-app
+# Target app listening on http://localhost:4173
+# Login with username="operator" password="demo-pass-1234"  (synthetic, not a real credential)
+```
+
+## Demo path
+
+The exact commands to run the agent on a goal, then replay the resulting
+artifact. Requires `ANTHROPIC_API_KEY` (see Setup) and the target app
+running (`npm run target-app`, above).
+
+```bash
+# 1. Run the agent on a goal -- a genuine claude-sonnet-5 tool-use loop
+#    against the live target app, no pre-existing artifact involved.
+#    --auto-compile means a successful run is saved as a capability
+#    artifact automatically, in this same command.
+npm run discover -- \
+  --goal "Look up member {{inputs.memberId}} and read their current savings balance" \
+  --target-url http://localhost:4173 --entry-route /member-search \
+  --input memberId=12345 --sensitive-input memberId --pattern memberId='^[0-9]{5}$' \
+  --evidence-dir evidence/discovery-run-autocompile \
+  --auto-compile --output-schema output-schemas/member-read-savings-balance.json \
+  --capability-id member.read-savings-balance --version 3
+
+# 2. Replay the resulting artifact -- a DIFFERENT input the discovery run
+#    never saw, zero LLM calls (mode=REPLAY llmCalls=0 is printed because
+#    there is structurally no LLM-client import in the replay engine).
+npm run replay -- --capability member.read-savings-balance --version 3 \
+  --input memberId=67890 --evidence-dir evidence/verify-autocompile
+```
+
+Command 1 writes `capabilities/member.read-savings-balance.v3.json` and a
+full trace/screenshots to `evidence/discovery-run-autocompile/`. Command 2
+succeeds with a *different* real balance (`memberId=67890` was never used
+during discovery) — the mechanical proof the artifact was parameterized,
+not just replayed the one input it was recorded against — and writes its
+own run state/events/screenshot to `evidence/verify-autocompile/`.
+
+See ["The end-to-end thread"](#the-end-to-end-thread) below for the same
+two commands walked through in full, plus the artifact's own
+`provenance.discoveryRunId` lineage, the error/outcome-handling taxonomy,
+and a human-escalation cycle continuing directly from this same artifact
+family.
+
+### More replay scenarios
+
+The two commands above are the minimal thread. `member.read-savings-balance`
+`v1` (hand-authored, richer than `v3` — see "The end-to-end thread" for why)
+demonstrates every outcome the replay engine handles, run by the identical
+engine with zero LLM calls either way:
+
+```bash
+# Success
+npm run replay -- --capability member.read-savings-balance --version 1 \
+  --input memberId=12345 --evidence-dir evidence/replay-success
+
+# Business outcome -- a legitimate result, not a crash
+npm run replay -- --capability member.read-savings-balance --version 1 \
+  --input memberId=99999 --evidence-dir evidence/replay-business-outcome
+
+# Hard failure -- input rejected before anything touches the surface
+npm run replay -- --capability member.read-savings-balance --version 1 \
+  --input memberId=abc --evidence-dir evidence/replay-failure
+
+# Recoverable: an unexpected dialog, dismissed automatically once
+npm run replay -- --capability member.read-savings-balance --version 1 \
+  --input memberId=44444 --evidence-dir evidence/replay-recovered-dialog
+
+# Recoverable: a transient slow load, recovered by retry
+npm run replay -- --capability member.read-savings-balance --version 1 \
+  --input memberId=55555 --evidence-dir evidence/replay-recovered-slow-load
+
+# Business outcome: a validation error the APP itself rejects (well-formed,
+# reserved) -- distinct from "not found", which only fires after a lookup
+npm run replay -- --capability member.read-savings-balance --version 1 \
+  --input memberId=00000 --evidence-dir evidence/replay-validation-error
+
+# Business outcome: permission denied -- a real member, permanently restricted
+npm run replay -- --capability member.read-savings-balance --version 1 \
+  --input memberId=88888 --evidence-dir evidence/replay-permission-denied
+
+# Hard failure: session expires mid-flow -- status: failure, code: SESSION_EXPIRED
+npm run replay -- --capability member.read-savings-balance --version 1 \
+  --input memberId=22222 --evidence-dir evidence/replay-session-expired
+```
+
+## The end-to-end thread
+
+The two-command demo path above is the minimal version of this. This
+section is the full version: one continuous, reproducible path from a
+goal all the way through a human-escalation cycle, with real evidence at
+every stage — the specific thing §5 of the brief asks for ("a working
+thread that runs all the way through"), told as one story instead of
+assembled from separate demo sections.
 
 **1. The goal.** `"Look up member {{inputs.memberId}} and read their
 current savings balance"` — a genuine multi-step flow (search → detail
 → accounts, routed through a deliberately hostile iframe) against the
 local target app, no pre-existing artifact involved.
 
-**2. A real LLM-driven run that completes it.**
+**2. A real LLM-driven run that completes it.** The exact command from
+"Demo path" above:
 
 ```bash
 npm run discover -- \
@@ -122,9 +231,9 @@ npm run operator -- --evidence-dir evidence/replay-handoff \
 `http://localhost:4500` → viewing claims the intervention, a quick-action
 clicks a real control on the live session, Resume (with a note) hands
 control back — the worker re-grounds and completes on its own. The more
-complete version of this same mechanism (§3.4/§3.6 below) carries a
-`risky_irreversible` mutation all the way through this exact cycle to a
-genuine account deletion, not just a dialog dismissal.
+complete version of this same mechanism ("Risk-class handling demo"
+below) carries a `risky_irreversible` mutation all the way through this
+exact cycle to a genuine account deletion, not just a dialog dismissal.
 
 **7. Evidence for both runs**, in one place, not scattered: everything
 named above is a real directory under `evidence/` in this repo, checked
@@ -132,21 +241,6 @@ into git — screenshots, `events.jsonl`/`trace.jsonl`, and `result.json`/
 `summary.json` for every step of this thread, reproducible by running
 the commands above yourself against the local target app (see
 "Verify it yourself" below).
-
-## Setup
-
-Requires Node.js 20+.
-
-```bash
-npm install
-npm run build              # type-check + compile
-npm test                   # contract schema tests
-npm run validate:artifacts # validate every artifact in /capabilities against the schema
-npm run emit:jsonschema    # regenerate capabilities/schema.json from the Zod source of truth
-```
-
-Copy `.env.example` to `.env` and set `ANTHROPIC_API_KEY` if you want to run
-discovery or compilation (see below) — nothing else needs it.
 
 ## Verify it yourself
 
@@ -226,168 +320,6 @@ also open `http://localhost:9333/json` in a browser at that point to see
 the raw CDP target list Chromium is exposing (`CDP_PORT` in
 `src/surface/adapter.ts`) — the same endpoint the operator console and
 the compiler both attach to.
-
-## Capability catalog over real MCP (vendor-neutral)
-
-The capability catalog (Slice 9) is exposed two ways: through the
-Anthropic SDK directly (`npm run catalog:demo`), and as a genuine MCP
-server (`@modelcontextprotocol/sdk`, real `tools/list`/`tools/call`
-JSON-RPC over HTTP) so any MCP-compatible client can use it, not just
-Claude via the Anthropic SDK.
-
-```bash
-npm run mcp -- --port 4600
-```
-
-**Browser test UI** — open `http://localhost:4600/` — lists every tool
-from a real `tools/list` call and gives you a form to `tools/call` each
-one, showing the raw JSON-RPC response.
-
-**Postman-style curl**, hitting the identical endpoint the UI uses:
-
-```bash
-curl -s -X POST http://localhost:4600/mcp \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
-
-curl -s -X POST http://localhost:4600/mcp \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
-  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"member_read-savings-balance_v2","arguments":{"memberId":"67890"}}}'
-```
-
-Only `v2` (promoted to `verified` in Slice 7) appears in the catalog —
-`v1` is still `draft` and is excluded by `loadCatalog()` on purpose.
-
-## Stretch: route canonicalization
-
-The compiler derives `scope.allowedRoutes` from routes actually visited
-during its own live replay rather than a hand-typed list — recompile and
-see for yourself:
-
-```bash
-npm run compile -- --trace-dir evidence/discovery-run \
-  --capability-id member.read-savings-balance --version 2 \
-  --output capabilities/member.read-savings-balance.v2.json \
-  --replay-input memberId=12345
-```
-
-Look at the printed `Derived scope.allowedRoutes` line, or the
-`scope.allowedRoutes` field in the written JSON: `/member/12345/accounts`
-became `/member/:memberId/accounts` mechanically, not hand-typed.
-Recompiling resets the artifact to `draft` — re-run the verification gate
-and `npm run promote` afterward (see the compiling section above) if you
-want it `verified` again.
-
-## Stretch: multi-run stability
-
-```bash
-npm run stability -- --capability member.read-savings-balance --version 2 \
-  --input memberId=67890 --runs 5 --evidence-dir evidence/stability-v2
-```
-
-Replays the artifact N times and reports success rate plus per-step rung
-consistency — a step resolving via a different candidate strategy across
-otherwise-identical runs is a real drift signal even when every run
-individually succeeds. `evidence/stability-v2/summary.json` has the
-aggregate; `evidence/stability-v2/run-N/` has each individual run's full
-evidence.
-
-## What's here so far
-
-```
-src/contracts/    Zod schemas — the single source of truth for artifact
-                   shape, execution results, run state, policy decisions,
-                   intervention requests, and evidence events. Everything
-                   downstream (adapter, replay engine, compiler) types
-                   against this package.
-capabilities/     Versioned capability artifacts. member.read-savings-balance.v1.json
-                   is hand-authored (per the plan: replay is built and proven
-                   against a hand-written artifact before any LLM is involved).
-scripts/          validate-artifacts.ts (schema gate) and emit-json-schema.ts
-                   (Zod -> JSON Schema, later reused as the agent tool-call
-                   definition for the capability catalog).
-tests/            Vitest suite over the contracts, including negative cases
-                   (rejects PAUSED as a run status, rejects free-text
-                   conditions, rejects an out-of-vocabulary semantic purpose,
-                   flags a targetRegistry referential-integrity break).
-target-app/       The local legacy-style banking demo automation runs
-                   against: login, member search, member detail, accounts.
-                   Table layout, no test IDs, a member-ID field with no
-                   label association (forces the adapter's fallback
-                   ladder to actually fire), account fields rendered
-                   inside a named iframe (a real frame-traversal case).
-docs/capability.schema.json  Generated JSON Schema (do not hand-edit —
-                   regenerate with `npm run emit:jsonschema`).
-```
-
-## Running the target app
-
-```bash
-npm run target-app
-# Target app listening on http://localhost:4173
-# Login with username="operator" password="demo-pass-1234"  (synthetic, not a real credential)
-```
-
-Then in a browser: `/login` -> `/member-search` -> search `12345` -> `/member/12345` -> "Accounts" link -> savings balance renders inside the accounts iframe. Any other member ID currently 404s with a not-found banner (business-outcome handling for this is wired up in Slice 4).
-
-## Running the Slice 2 gate (adapter + policy, no replay engine yet)
-
-With the target app running in another terminal:
-```bash
-npm run smoke:adapter
-```
-Drives the real Playwright adapter through the artifact's step sequence
-against the live app -- login, search, navigate, extract, checkpoint --
-with zero LLM and zero replay engine involved. Confirms an out-of-allowlist
-route is denied before a browser even launches, and that the member-ID
-field's targeting genuinely falls through from role_and_name to the
-associated_label heuristic (the real markup has no label association).
-Screenshot evidence lands in `tmp/` (gitignored dev scratch -- curated
-`/evidence/` directories start with Slice 3's replay engine).
-
-## Demo path
-
-Deterministic replay (no LLM — the CLI prints `llmCalls=0` because there is
-structurally no code path in the replay engine that could make it anything
-else, see `tests/replay/no-llm-import.test.ts`). With the target app
-running in another terminal:
-
-```bash
-# Success
-npm run replay -- --capability member.read-savings-balance --version 1 \
-  --input memberId=12345 --evidence-dir evidence/replay-success
-
-# Business outcome -- a legitimate result, not a crash
-npm run replay -- --capability member.read-savings-balance --version 1 \
-  --input memberId=99999 --evidence-dir evidence/replay-business-outcome
-
-# Hard failure -- input rejected before anything touches the surface
-npm run replay -- --capability member.read-savings-balance --version 1 \
-  --input memberId=abc --evidence-dir evidence/replay-failure
-
-# Recoverable: an unexpected dialog, dismissed automatically once
-npm run replay -- --capability member.read-savings-balance --version 1 \
-  --input memberId=44444 --evidence-dir evidence/replay-recovered-dialog
-
-# Recoverable: a transient slow load, recovered by retry
-npm run replay -- --capability member.read-savings-balance --version 1 \
-  --input memberId=55555 --evidence-dir evidence/replay-recovered-slow-load
-
-# Business outcome: a validation error the APP itself rejects (well-formed,
-# reserved) -- distinct from "not found", which only fires after a lookup
-npm run replay -- --capability member.read-savings-balance --version 1 \
-  --input memberId=00000 --evidence-dir evidence/replay-validation-error
-
-# Business outcome: permission denied -- a real member, permanently restricted
-npm run replay -- --capability member.read-savings-balance --version 1 \
-  --input memberId=88888 --evidence-dir evidence/replay-permission-denied
-
-# Hard failure: session expires mid-flow -- status: failure, code: SESSION_EXPIRED
-npm run replay -- --capability member.read-savings-balance --version 1 \
-  --input memberId=22222 --evidence-dir evidence/replay-session-expired
-```
 
 ## Human handoff demo
 
@@ -471,7 +403,7 @@ back. The worker re-grounds and completes with the account genuinely
 deleted -- `evidence/replay-close-subaccount-handoff/success.png` shows
 "Account SAV-90000 has been closed."
 
-## Discovery (genuine LLM-driven run)
+## Discovery (genuine LLM-driven run, without auto-compile)
 
 Requires `ANTHROPIC_API_KEY` in `.env` (copy `.env.example`). With the
 target app running:
@@ -586,17 +518,8 @@ the raw value.
 The two-step flow above (`discover` then a separate `compile`) still
 requires the operator to remember to run `compile` at all. `--auto-compile`
 closes that: a successful discovery run is compiled into a draft artifact
-in the *same* command, no separate step.
-
-```bash
-npm run discover -- \
-  --goal "Look up member {{inputs.memberId}} and read their current savings balance" \
-  --target-url http://localhost:4173 --entry-route /member-search \
-  --input memberId=12345 --sensitive-input memberId --pattern memberId='^[0-9]{5}$' \
-  --evidence-dir evidence/discovery-run-autocompile \
-  --auto-compile --output-schema output-schemas/member-read-savings-balance.json \
-  --capability-id member.read-savings-balance --version 3
-```
+in the *same* command, no separate step -- this is exactly the "Demo
+path" command at the top of this README.
 
 `--output-schema` points at a JSON file declaring the *desired* outputs
 and their fields (name, type, a column-header hint, a `semanticPurpose` for
@@ -631,6 +554,39 @@ replay time -- there's no producer for it yet, and a schema is allowed to
 describe more than the runtime currently fulfills as long as it says so
 at the point of failure rather than emitting something silently wrong.
 
+## Capability catalog over real MCP (vendor-neutral)
+
+The capability catalog (Slice 9) is exposed two ways: through the
+Anthropic SDK directly (`npm run catalog:demo`), and as a genuine MCP
+server (`@modelcontextprotocol/sdk`, real `tools/list`/`tools/call`
+JSON-RPC over HTTP) so any MCP-compatible client can use it, not just
+Claude via the Anthropic SDK.
+
+```bash
+npm run mcp -- --port 4600
+```
+
+**Browser test UI** — open `http://localhost:4600/` — lists every tool
+from a real `tools/list` call and gives you a form to `tools/call` each
+one, showing the raw JSON-RPC response.
+
+**Postman-style curl**, hitting the identical endpoint the UI uses:
+
+```bash
+curl -s -X POST http://localhost:4600/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+
+curl -s -X POST http://localhost:4600/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"member_read-savings-balance_v2","arguments":{"memberId":"67890"}}}'
+```
+
+Only `v2` (promoted to `verified` in Slice 7) appears in the catalog —
+`v1` is still `draft` and is excluded by `loadCatalog()` on purpose.
+
 ## Stretch: multi-tenant reuse
 
 The same verified `v2` artifact, recorded against tenant A, replayed
@@ -654,7 +610,7 @@ before running the replay. `tenants/credit-union-b.json` overrides only
 those two `targetRegistry` entries; everything else (steps, checkpoint,
 the other two extraction targets) is untouched from the base artifact.
 
-## Stretch: capability catalog
+## Stretch: capability catalog (Anthropic SDK)
 
 Every `verified`/`approved` artifact becomes an Anthropic tool
 definition, generated from the same Zod schema that validates the
@@ -667,6 +623,83 @@ npm run catalog:demo -- --request "What is member 12345's current savings balanc
 Claude sees the catalog (only `v2` -- `v1` is still `draft` and is
 excluded), picks the matching capability, supplies typed arguments, and
 the deterministic replay engine (not the model) executes it.
+
+## Stretch: route canonicalization
+
+The compiler derives `scope.allowedRoutes` from routes actually visited
+during its own live replay rather than a hand-typed list — recompile and
+see for yourself:
+
+```bash
+npm run compile -- --trace-dir evidence/discovery-run \
+  --capability-id member.read-savings-balance --version 2 \
+  --output capabilities/member.read-savings-balance.v2.json \
+  --replay-input memberId=12345
+```
+
+Look at the printed `Derived scope.allowedRoutes` line, or the
+`scope.allowedRoutes` field in the written JSON: `/member/12345/accounts`
+became `/member/:memberId/accounts` mechanically, not hand-typed.
+Recompiling resets the artifact to `draft` — re-run the verification gate
+and `npm run promote` afterward (see the compiling section above) if you
+want it `verified` again.
+
+## Stretch: multi-run stability
+
+```bash
+npm run stability -- --capability member.read-savings-balance --version 2 \
+  --input memberId=67890 --runs 5 --evidence-dir evidence/stability-v2
+```
+
+Replays the artifact N times and reports success rate plus per-step rung
+consistency — a step resolving via a different candidate strategy across
+otherwise-identical runs is a real drift signal even when every run
+individually succeeds. `evidence/stability-v2/summary.json` has the
+aggregate; `evidence/stability-v2/run-N/` has each individual run's full
+evidence.
+
+## What's here so far
+
+```
+src/contracts/    Zod schemas — the single source of truth for artifact
+                   shape, execution results, run state, policy decisions,
+                   intervention requests, and evidence events. Everything
+                   downstream (adapter, replay engine, compiler) types
+                   against this package.
+capabilities/     Versioned capability artifacts. member.read-savings-balance.v1.json
+                   is hand-authored (per the plan: replay is built and proven
+                   against a hand-written artifact before any LLM is involved).
+scripts/          validate-artifacts.ts (schema gate) and emit-json-schema.ts
+                   (Zod -> JSON Schema, later reused as the agent tool-call
+                   definition for the capability catalog).
+tests/            Vitest suite over the contracts, including negative cases
+                   (rejects PAUSED as a run status, rejects free-text
+                   conditions, rejects an out-of-vocabulary semantic purpose,
+                   flags a targetRegistry referential-integrity break).
+target-app/       The local legacy-style banking demo automation runs
+                   against: login, member search, member detail, accounts.
+                   Table layout, no test IDs, a member-ID field with no
+                   label association (forces the adapter's fallback
+                   ladder to actually fire), account fields rendered
+                   inside a named iframe (a real frame-traversal case).
+docs/capability.schema.json  Generated JSON Schema (do not hand-edit —
+                   regenerate with `npm run emit:jsonschema`).
+```
+
+## Running the Slice 2 gate (adapter + policy, no replay engine yet)
+
+With the target app running in another terminal:
+```bash
+npm run smoke:adapter
+```
+Drives the real Playwright adapter through the artifact's step sequence
+against the live app -- login, search, navigate, extract, checkpoint --
+with zero LLM and zero replay engine involved. Confirms an out-of-allowlist
+route is denied before a browser even launches, and that the member-ID
+field's targeting genuinely falls through from role_and_name to the
+associated_label heuristic (the real markup has no label association).
+Screenshot evidence lands in `tmp/` (gitignored dev scratch -- curated
+`/evidence/` directories start with Slice 3's replay engine).
 
 ## Design write-up
 
