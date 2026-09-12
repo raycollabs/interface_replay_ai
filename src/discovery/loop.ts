@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { PlaywrightSurfaceAdapter } from '../surface/adapter.js';
 import type { PolicyContext } from '../policy/allowlist.js';
 import { redact } from '../policy/redact.js';
@@ -5,6 +6,9 @@ import { DiscoveryModel } from './model.js';
 import { observeWithMarks, resolveMark } from './setOfMarks.js';
 import { DiscoveryActionSchema } from './actions.js';
 import { appendTraceEntry, writeTraceSummary } from './trace.js';
+import type { RunEvent } from '../contracts/index.js';
+import { appendEvent } from '../replay/runStore.js';
+import { readIntervention, waitForResolution, writeIntervention, writeSessionHandle } from '../session/broker.js';
 
 export interface DiscoveryOptions {
   evidenceDir: string;
@@ -33,6 +37,23 @@ export interface DiscoveryOptions {
   timeoutMs?: number;
   headless?: boolean;
   bootstrapSession?: (adapter: PlaywrightSurfaceAdapter) => Promise<void>;
+  /**
+   * 3.6 gap closure: "the agent is stuck during discovery" is one of the
+   * three explicit handoff triggers in the brief -- but the original
+   * implementation only ever wrote a `stuck` trace summary and closed the
+   * browser, exactly like a `failed` run, giving a human nowhere to look
+   * or act and no live session left to attach to by the time anyone
+   * could react. When true, every stuck point below routes through the
+   * SAME intervention/session-handle/waitForResolution mechanism
+   * `ReplayRun.escalate()` already uses (src/replay/engine.ts) instead of
+   * giving up immediately. Default false preserves the original one-shot
+   * CLI behavior exactly (e.g. the --auto-compile pipeline, which has no
+   * operator to wait for and should fail fast).
+   */
+  suspendAndWaitForResume?: boolean;
+  /** How long to wait for an operator before giving up. Default 10 min,
+   *  same default replay's escalate() uses. */
+  resumeTimeoutMs?: number;
 }
 
 export type DiscoveryResult =
@@ -45,6 +66,84 @@ function stateFingerprint(controls: { role: string; accessibleName: string }[], 
   return `${url}::${sorted}`;
 }
 
+function emitDiscoveryEvent(evidenceDir: string, runId: string, type: RunEvent['type'], data: Record<string, unknown>): void {
+  const event: RunEvent = { eventId: randomUUID(), runId, type, timestamp: new Date().toISOString(), data };
+  appendEvent(evidenceDir, event);
+}
+
+/**
+ * The discovery-side equivalent of `ReplayRun.escalate()` (src/replay/
+ * engine.ts) -- same intervention/session-handle/waitForResolution
+ * mechanism, same ownership sequence (AUTOMATION -> NONE -> HUMAN -> NONE
+ * -> AUTOMATION), reused verbatim rather than re-implemented, because a
+ * human-in-the-loop handoff is the same concept regardless of which side
+ * of the compile boundary got stuck. `capabilityId` stays unset on the
+ * written intervention (there IS no capability yet -- that's the entire
+ * point of discovery); `goal` is set instead, which
+ * `InterventionRequestSchema` already declares as a separate optional
+ * field for exactly this case.
+ *
+ * Returns `{resume:true}` if an operator resolved the intervention within
+ * the timeout (the caller decides what "resume" means for its own stuck
+ * condition -- extend a deadline, reset a repeat counter, or just
+ * continue the loop); `{resume:false}` if suspension wasn't requested at
+ * all, or the timeout elapsed with no resolution.
+ */
+async function escalateDiscovery(
+  adapter: PlaywrightSurfaceAdapter,
+  opts: DiscoveryOptions,
+  runId: string,
+  reasonCode: string,
+  explanation: string,
+  screenshotPath: string,
+  stepNumber: number,
+): Promise<{ resume: boolean }> {
+  const interventionId = randomUUID();
+  emitDiscoveryEvent(opts.evidenceDir, runId, 'INTERVENTION_REQUESTED', { reason: reasonCode, interventionId });
+
+  const cdpEndpoint = adapter.wsEndpoint;
+  if (cdpEndpoint) writeSessionHandle(opts.evidenceDir, { sessionId: runId, cdpEndpoint });
+
+  writeIntervention(opts.evidenceDir, {
+    interventionId,
+    runId,
+    sessionId: runId,
+    goal: opts.goal,
+    stepId: `discovery-step-${stepNumber}`,
+    reasonCode,
+    explanation,
+    screenshotRef: screenshotPath,
+    observationRef: screenshotPath,
+    allowedHumanActions: ['view', 'act-by-text', 'resume'],
+    createdAt: new Date().toISOString(),
+    status: 'open',
+  });
+
+  if (!opts.suspendAndWaitForResume) return { resume: false };
+
+  emitDiscoveryEvent(opts.evidenceDir, runId, 'CONTROL_TRANSFERRED', { to: 'HUMAN', interventionId });
+  const resolved = await waitForResolution(opts.evidenceDir, opts.resumeTimeoutMs ?? 10 * 60_000);
+
+  if (!resolved) {
+    emitDiscoveryEvent(opts.evidenceDir, runId, 'RUN_FAILED', { code: 'ESCALATION_UNAVAILABLE', interventionId });
+    return { resume: false };
+  }
+
+  const resolvedIntervention = readIntervention(opts.evidenceDir);
+  emitDiscoveryEvent(opts.evidenceDir, runId, 'CONTROL_TRANSFERRED', { to: 'AUTOMATION', interventionId });
+  emitDiscoveryEvent(opts.evidenceDir, runId, 'AUTOMATION_RESUMED', { interventionId });
+  appendTraceEntry(opts.evidenceDir, {
+    step: stepNumber,
+    timestamp: new Date().toISOString(),
+    observation: { screenshotPath, controls: [] },
+    modelRationale: `(human intervention, not a model decision) ${resolvedIntervention?.resolutionNote ?? '(no note provided)'}`,
+    toolName: 'human_intervention',
+    toolInput: {},
+    outcome: { kind: 'resumed_by_operator', operatorId: resolvedIntervention?.claimedBy ?? 'unknown-operator' },
+  });
+  return { resume: true };
+}
+
 /**
  * The observe -> decide -> act loop. Stop conditions: max steps, wall-
  * clock timeout, a model-initiated finish() or request_human(), a policy
@@ -53,8 +152,13 @@ function stateFingerprint(controls: { role: string; accessibleName: string }[], 
  * continuing would just burn steps).
  */
 export async function runDiscovery(opts: DiscoveryOptions): Promise<DiscoveryResult> {
-  const maxSteps = opts.maxSteps ?? 15;
-  const deadline = Date.now() + (opts.timeoutMs ?? 120_000);
+  const runId = randomUUID();
+  // Both mutable: a successful human handoff extends whichever budget
+  // triggered the escalation (a fresh time window, or a fresh step
+  // allowance) rather than resuming into an escalation that immediately
+  // re-fires on the very next check.
+  let effectiveMaxSteps = opts.maxSteps ?? 15;
+  let deadline = Date.now() + (opts.timeoutMs ?? 120_000);
   const redactValues = opts.sensitiveInputNames.map((n) => String(opts.inputs[n] ?? '')).filter(Boolean);
 
   // The {{inputs.NAME}} placeholder mechanism only protects a sensitive
@@ -86,6 +190,12 @@ export async function runDiscovery(opts: DiscoveryOptions): Promise<DiscoveryRes
   // and this is the one place it's acted on.
   const entryOutcome = await adapter.performDiscoveryNavigate(opts.entryRoute, opts.policyCtx);
   if (entryOutcome.kind !== 'executed') {
+    // Deliberately NOT routed through escalateDiscovery: an entry route
+    // rejected by policy is a configuration problem (the route isn't
+    // allowlisted), not a live-page obstacle a human can clear by acting
+    // on the session -- there is nothing on screen yet to click through.
+    // Fixing this means changing the allowlist/scope, not intervening on
+    // a page.
     const result: DiscoveryResult = { status: 'stuck', reason: `ENTRY_ROUTE_BLOCKED: ${JSON.stringify(entryOutcome)}`, steps: 0 };
     writeTraceSummary(opts.evidenceDir, result);
     await adapter.close();
@@ -101,8 +211,43 @@ export async function runDiscovery(opts: DiscoveryOptions): Promise<DiscoveryRes
   let priorToolUseId: string | undefined;
 
   try {
-    for (let step = 1; step <= maxSteps; step++) {
+    for (let step = 1; ; step++) {
+      if (step > effectiveMaxSteps) {
+        const escalationScreenshot = `${opts.evidenceDir}/escalation-step-${String(step).padStart(2, '0')}.png`;
+        await page.screenshot({ path: escalationScreenshot }).catch(() => {});
+        const escalation = await escalateDiscovery(
+          adapter,
+          opts,
+          runId,
+          'MAX_STEPS',
+          `Discovery reached its step budget (${effectiveMaxSteps}) without completing the goal.`,
+          escalationScreenshot,
+          step,
+        );
+        if (escalation.resume) {
+          effectiveMaxSteps += opts.maxSteps ?? 15; // a fresh budget, not an unbounded one
+          continue;
+        }
+        writeTraceSummary(opts.evidenceDir, { status: 'stuck', reason: 'MAX_STEPS', steps: step - 1 });
+        return { status: 'stuck', reason: 'MAX_STEPS', steps: step - 1 };
+      }
+
       if (Date.now() > deadline) {
+        const escalationScreenshot = `${opts.evidenceDir}/escalation-step-${String(step).padStart(2, '0')}.png`;
+        await page.screenshot({ path: escalationScreenshot }).catch(() => {});
+        const escalation = await escalateDiscovery(
+          adapter,
+          opts,
+          runId,
+          'TIMEOUT',
+          `Discovery exceeded its wall-clock timeout (${opts.timeoutMs ?? 120_000}ms) without completing the goal.`,
+          escalationScreenshot,
+          step,
+        );
+        if (escalation.resume) {
+          deadline = Date.now() + (opts.timeoutMs ?? 120_000); // a fresh window, not the already-passed one
+          continue;
+        }
         writeTraceSummary(opts.evidenceDir, { status: 'stuck', reason: 'TIMEOUT', steps: step - 1 });
         return { status: 'stuck', reason: 'TIMEOUT', steps: step - 1 };
       }
@@ -114,6 +259,19 @@ export async function runDiscovery(opts: DiscoveryOptions): Promise<DiscoveryRes
       if (fingerprint === lastFingerprint) {
         repeatCount++;
         if (repeatCount >= 2) {
+          const escalation = await escalateDiscovery(
+            adapter,
+            opts,
+            runId,
+            'REPEATED_STATE',
+            'The same page state repeated across consecutive turns despite an action having been taken -- nothing appears to be changing.',
+            screenshotPath,
+            step,
+          );
+          if (escalation.resume) {
+            repeatCount = 0; // give the (human-modified) state a fresh chance before re-flagging
+            continue;
+          }
           writeTraceSummary(opts.evidenceDir, { status: 'stuck', reason: 'REPEATED_STATE', steps: step - 1 });
           return { status: 'stuck', reason: 'REPEATED_STATE', steps: step - 1 };
         }
@@ -123,7 +281,7 @@ export async function runDiscovery(opts: DiscoveryOptions): Promise<DiscoveryRes
       lastFingerprint = fingerprint;
 
       const decision = await model.decide(
-        { goal: opts.goal, inputNames: Object.keys(opts.inputs), screenshotPath, controls, stepNumber: step, maxSteps },
+        { goal: opts.goal, inputNames: Object.keys(opts.inputs), screenshotPath, controls, stepNumber: step, maxSteps: effectiveMaxSteps },
         priorToolResult,
         priorToolUseId,
       );
@@ -171,6 +329,20 @@ export async function runDiscovery(opts: DiscoveryOptions): Promise<DiscoveryRes
             toolInput: decision.toolInput,
             outcome: { kind: 'request_human' },
           });
+          const escalation = await escalateDiscovery(
+            adapter,
+            opts,
+            runId,
+            'MODEL_REQUESTED_HUMAN',
+            `The model explicitly asked for a human: ${action.reason}`,
+            screenshotPath,
+            step,
+          );
+          if (escalation.resume) {
+            priorToolResult = 'A human operator intervened and resumed automation. Re-observe the current state before deciding your next action.';
+            priorToolUseId = decision.toolUseId;
+            continue;
+          }
           const result: DiscoveryResult = { status: 'stuck', reason: `MODEL_REQUESTED_HUMAN: ${action.reason}`, steps: step };
           const redacted = redact(result, redactValues);
           writeTraceSummary(opts.evidenceDir, redacted);
@@ -220,6 +392,35 @@ export async function runDiscovery(opts: DiscoveryOptions): Promise<DiscoveryRes
 
         if (outcomeForTrace && typeof outcomeForTrace === 'object' && 'kind' in outcomeForTrace) {
           const kind = (outcomeForTrace as { kind: string }).kind;
+          // require_human routes to a person (same reasoning as
+          // MODEL_REQUESTED_HUMAN above: a risk-class gate is exactly
+          // what 3.6 means by "a risky/irreversible step needs a person
+          // to decide"). policy_denied does NOT -- an out-of-allowlist
+          // action is a containment boundary, the same class of problem
+          // as ENTRY_ROUTE_BLOCKED above, and handing a human the live
+          // session to work around it would undermine the boundary
+          // rather than honor it. (Discovery's own adapter methods never
+          // pass a riskClass today -- see performDiscoveryClick/Navigate/
+          // Type/Extract in src/surface/adapter.ts -- so require_human
+          // cannot actually fire yet here; this branch is future-proofed
+          // for when it can, not exercised live by anything currently in
+          // this repo.)
+          if (kind === 'require_human') {
+            const escalation = await escalateDiscovery(
+              adapter,
+              opts,
+              runId,
+              'REQUIRE_HUMAN',
+              `Policy requires an explicit human decision for this action: ${JSON.stringify(outcomeForTrace)}`,
+              screenshotPath,
+              step,
+            );
+            if (escalation.resume) {
+              priorToolResult = 'A human operator intervened and resumed automation. Re-observe the current state before deciding your next action.';
+              priorToolUseId = decision.toolUseId;
+              continue;
+            }
+          }
           if (kind === 'policy_denied' || kind === 'require_human') {
             const result: DiscoveryResult = { status: 'stuck', reason: `POLICY: ${JSON.stringify(outcomeForTrace)}`, steps: step };
             writeTraceSummary(opts.evidenceDir, result);
@@ -231,9 +432,10 @@ export async function runDiscovery(opts: DiscoveryOptions): Promise<DiscoveryRes
       priorToolResult = toolResultText;
       priorToolUseId = decision.toolUseId;
     }
-
-    writeTraceSummary(opts.evidenceDir, { status: 'stuck', reason: 'MAX_STEPS', steps: maxSteps });
-    return { status: 'stuck', reason: 'MAX_STEPS', steps: maxSteps };
+    // Unreachable: the loop is unbounded (`for (let step = 1; ; step++)`)
+    // specifically so MAX_STEPS can be re-checked (and, on a resumed
+    // escalation, extended) in-body rather than via the for-loop's own
+    // bound -- every exit path is one of the explicit returns above.
   } finally {
     await adapter.close();
   }

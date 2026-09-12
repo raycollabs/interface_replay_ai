@@ -391,6 +391,56 @@ and action; `summary.json` has the final result. Prints `mode=DISCOVERY`
 and completes in a handful of steps against the live app -- no
 pre-existing artifact involved.
 
+## Discovery-time handoff (3.6 gap closure)
+
+"The agent is stuck during discovery" is one of the brief's own three
+named handoff triggers. `--wait-for-handoff` gives discovery the exact
+same suspend/resume mechanism replay's escalation already uses --
+`intervention.json`, `session-handle.json`, a live CDP session an
+operator console can attach to -- instead of just failing closed with
+the browser already gone.
+
+```bash
+# Terminal 1: a near-zero --timeout-ms forces an immediate, deterministic
+# TIMEOUT escalation (real model/network calls would otherwise make
+# "when exactly does it get stuck" non-deterministic to demo).
+MSYS_NO_PATHCONV=1 npm run discover -- \
+  --goal "Look up member {{inputs.memberId}} and read their current savings balance" \
+  --target-url http://localhost:4173 --entry-route /member-search \
+  --input memberId=12345 --sensitive-input memberId --timeout-ms 100 \
+  --wait-for-handoff --resume-timeout-ms 90000 \
+  --evidence-dir evidence/discovery-handoff-demo
+
+# Terminal 2: --capability/--version are optional here -- there IS no
+# capability yet, that's the entire point of discovery. Without one, the
+# console shows "Discovery goal" instead of "Capability" and offers only
+# the generic action below (no capability-specific quick-action button).
+npm run operator -- --evidence-dir evidence/discovery-handoff-demo
+```
+
+Open `http://localhost:4500`. There's nothing capability-specific to
+click yet, so just Resume (with a note) -- automation picks up with a
+fresh time budget and continues the SAME live session from wherever it
+left off. If the timeout is small enough that a resume immediately
+re-expires (an LLM round-trip genuinely takes longer than 100ms), just
+resume again; each cycle is a real, independent
+`INTERVENTION_REQUESTED -> CONTROL_TRANSFERRED -> HUMAN_ACTION ->
+CONTROL_TRANSFERRED -> AUTOMATION_RESUMED` sequence in `events.jsonl`,
+and the run completes the original goal for real once it clears --
+`status: "success"` with the correct balance, not a canned response.
+
+The console's `/act-by-text` endpoint is the generic quick-action a
+discovery-time intervention needs (no `targetRegistry` to resolve a
+`targetPurpose` against): it clicks by raw visible text instead, the
+same last-resort mechanism the targeting ladder's own `visible_text`
+rung already uses. It works for a replay intervention too -- try it
+against the risk-class demo above instead of the capability-specific
+button:
+
+```bash
+curl -X POST http://localhost:4500/act-by-text --data-urlencode "text=Confirm Close"
+```
+
 ## Compiling and verifying a discovered capability
 
 Turns a discovery trace into a versioned artifact, then proves it by

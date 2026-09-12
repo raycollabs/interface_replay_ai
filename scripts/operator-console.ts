@@ -12,15 +12,23 @@
  * back by flipping intervention.json's status to 'resolved' -- the one
  * field the worker is polling for. Nothing here is simulated.
  *
- * Usage:
+ * Usage (replay -- resolves quick-actions through the capability's own
+ * targetRegistry):
  *   npm run operator -- --evidence-dir evidence/replay-handoff \
  *     --capability member.read-savings-balance --version 1
+ *
+ * Usage (discovery -- 3.6 gap closure: --capability/--version are
+ * optional here, since there IS no capability artifact yet during
+ * discovery. Without one, the console falls back to a generic
+ * "click by visible text" action instead of a targetPurpose lookup --
+ * see /act-by-text below):
+ *   npm run operator -- --evidence-dir evidence/discovery-run
  */
 import express from 'express';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
-import { CapabilityDefinitionSchema, type RunEvent } from '../src/contracts/index.js';
+import { CapabilityDefinitionSchema, type CapabilityDefinition, type RunEvent } from '../src/contracts/index.js';
 import { resolveTarget } from '../src/surface/resolveTarget.js';
 import { readIntervention, readSessionHandle, writeIntervention } from '../src/session/broker.js';
 import { appendEvent } from '../src/replay/runStore.js';
@@ -36,13 +44,24 @@ function parseArgs(argv: string[]) {
 
 const args = parseArgs(process.argv.slice(2));
 const evidenceDir = args['evidence-dir'];
-if (!evidenceDir || !args.capability || !args.version) {
-  console.error('Usage: operator-console --evidence-dir <path> --capability <id> --version <n> [--port 4500]');
+if (!evidenceDir) {
+  console.error(
+    'Usage: operator-console --evidence-dir <path> [--capability <id> --version <n>] [--port 4500]\n' +
+      '(--capability/--version are optional -- omit them for a discovery-time intervention, which has no capability artifact yet.)',
+  );
   process.exit(1);
 }
 
-const artifactPath = fileURLToPath(new URL(`../capabilities/${args.capability}.v${args.version}.json`, import.meta.url));
-const capability = CapabilityDefinitionSchema.parse(JSON.parse(readFileSync(artifactPath, 'utf-8')));
+// Optional: a replay intervention has a real capability whose
+// targetRegistry the console can resolve quick-actions against. A
+// discovery intervention doesn't -- there is no capability yet, that's
+// the entire point of discovery -- so `capability` stays undefined and
+// the console falls back to the generic /act-by-text action instead.
+let capability: CapabilityDefinition | undefined;
+if (args.capability && args.version) {
+  const artifactPath = fileURLToPath(new URL(`../capabilities/${args.capability}.v${args.version}.json`, import.meta.url));
+  capability = CapabilityDefinitionSchema.parse(JSON.parse(readFileSync(artifactPath, 'utf-8')));
+}
 const OPERATOR_ID = 'operator-1'; // hardcoded demo identity -- Slice 8's phase-2 doc covers real tenant-scoped operator auth
 
 /**
@@ -101,19 +120,42 @@ app.get('/', async (_req, res) => {
     screenshotNote = `Live screenshot captured to ${evidenceDir}/operator-view.png (open it alongside this page).`;
   }
 
+  // A replay intervention names a capability; a discovery intervention
+  // names a goal instead (InterventionRequestSchema declares both as
+  // separate optional fields specifically for this distinction -- 3.6
+  // gap closure). Whichever is present tells the operator what they're
+  // looking at without guessing.
+  const contextLine = intervention.capabilityId
+    ? `<p><b>Capability:</b> ${intervention.capabilityId}</p>`
+    : `<p><b>Discovery goal:</b> ${intervention.goal ?? '(none recorded)'}</p>`;
+
+  // The capability-specific quick-action only makes sense when a
+  // capability (and therefore a targetRegistry) is actually loaded --
+  // discovery has neither, so it only ever gets the generic form below.
+  const quickAction = capability
+    ? `
+    <form method="post" action="/act">
+      <button type="submit" name="targetPurpose" value="unresolvable notice acknowledgment">
+        Click: "Acknowledge and escalate"
+      </button>
+    </form>`
+    : '';
+
   res.send(`
     <h1>Operator Console -- Intervention ${intervention.interventionId}</h1>
-    <p><b>Capability:</b> ${intervention.capabilityId}</p>
+    ${contextLine}
     <p><b>Stuck at step:</b> ${intervention.stepId}</p>
     <p><b>Reason:</b> ${intervention.reasonCode}</p>
     <p><b>Why it stopped:</b> ${intervention.explanation}</p>
     <p>${screenshotNote}</p>
     <hr/>
     <h2>Act on the live session</h2>
-    <form method="post" action="/act">
-      <button type="submit" name="targetPurpose" value="unresolvable notice acknowledgment">
-        Click: "Acknowledge and escalate"
-      </button>
+    ${quickAction}
+    <form method="post" action="/act-by-text">
+      <label>Click whatever text is visible on the live page:
+        <input type="text" name="text" size="40" placeholder="e.g. Continue" />
+      </label>
+      <button type="submit">Click</button>
     </form>
     <hr/>
     <h2>Resume automation</h2>
@@ -128,6 +170,7 @@ app.post('/act', async (req, res) => {
   const session = readSessionHandle(evidenceDir!);
   const intervention = readIntervention(evidenceDir!);
   if (!session || !intervention) return res.status(400).send('No active session/intervention.');
+  if (!capability) return res.status(400).send('No capability loaded for this console -- use /act-by-text instead.');
 
   const targetPurpose = String(req.body?.targetPurpose ?? '');
   const target = capability.targetRegistry[targetPurpose];
@@ -144,6 +187,38 @@ app.post('/act', async (req, res) => {
   logHumanAction(intervention.runId, { operatorId: OPERATOR_ID, action: 'click', targetPurpose });
 
   res.send(`<p>Clicked "${targetPurpose}". <a href="/">Back</a></p>`);
+});
+
+/**
+ * 3.6 gap closure: the generic quick-action a discovery-time intervention
+ * needs, since there is no capability (and therefore no targetRegistry)
+ * to resolve a targetPurpose against yet -- that's the entire point of
+ * discovery. Resolves by raw visible text instead, the same way the
+ * targeting ladder's own last-resort `visible_text` rung does
+ * (src/surface/resolveTarget.ts) -- weaker than a semantic purpose, but
+ * real: it clicks an actual control on the actual live session, not a
+ * simulation. Works for a replay intervention too (capability or not),
+ * since it never touches `capability` at all.
+ */
+app.post('/act-by-text', async (req, res) => {
+  const session = readSessionHandle(evidenceDir!);
+  const intervention = readIntervention(evidenceDir!);
+  if (!session || !intervention) return res.status(400).send('No active session/intervention.');
+
+  const text = String(req.body?.text ?? '').trim();
+  if (!text) return res.status(400).send('No text supplied.');
+
+  const { page } = await attach(session.cdpEndpoint);
+  const locator = page.getByText(text, { exact: false }).first();
+  if ((await locator.count()) === 0) {
+    return res.status(409).send(`No visible element matching text "${text}".`);
+  }
+  await locator.click();
+  await page.screenshot({ path: `${evidenceDir}/operator-after-action.png` }).catch(() => {});
+
+  logHumanAction(intervention.runId, { operatorId: OPERATOR_ID, action: 'click_by_text', text });
+
+  res.send(`<p>Clicked visible text "${text}". <a href="/">Back</a></p>`);
 });
 
 app.post('/resume', (req, res) => {

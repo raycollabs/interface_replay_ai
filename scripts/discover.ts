@@ -58,6 +58,8 @@ function parseArgs(argv: string[]) {
     app: string;
     versionRange: string;
     patterns: Record<string, string>;
+    waitForHandoff: boolean;
+    resumeTimeoutMs?: number;
   } = {
     input: {},
     sensitiveInputs: [],
@@ -67,6 +69,7 @@ function parseArgs(argv: string[]) {
     app: 'member-servicing-console',
     versionRange: '1.x',
     patterns: {},
+    waitForHandoff: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -77,6 +80,8 @@ function parseArgs(argv: string[]) {
     else if (arg === '--max-steps') args.maxSteps = Number(argv[++i]);
     else if (arg === '--timeout-ms') args.timeoutMs = Number(argv[++i]);
     else if (arg === '--sensitive-input') args.sensitiveInputs.push(argv[++i]!);
+    else if (arg === '--wait-for-handoff') args.waitForHandoff = true;
+    else if (arg === '--resume-timeout-ms') args.resumeTimeoutMs = Number(argv[++i]);
     else if (arg === '--auto-compile') args.autoCompile = true;
     else if (arg === '--output-schema') args.outputSchema = argv[++i];
     else if (arg === '--capability-id') args.capabilityId = argv[++i];
@@ -120,6 +125,7 @@ async function main() {
     console.error(
       'Usage: discover --goal "<goal>" --evidence-dir <path> [--target-url <url>] [--entry-route </path>] ' +
         '[--input k=v ...] [--sensitive-input NAME ...] ' +
+        '[--wait-for-handoff --resume-timeout-ms <ms>] ' +
         '[--auto-compile --output-schema <path> --capability-id <id> --version <n>]',
     );
     process.exitCode = 1;
@@ -161,6 +167,12 @@ async function main() {
   };
 
   console.log(`mode=DISCOVERY goal="${args.goal}" target=${baseUrl} entryRoute=${args.entryRoute}`);
+  if (args.waitForHandoff) {
+    console.log(
+      '(if discovery gets stuck, it will suspend in place and wait for a human -- start the operator console in another terminal:\n' +
+        `  npm run operator -- --evidence-dir ${args.evidenceDir})`,
+    );
+  }
 
   const result = await runDiscovery({
     evidenceDir: args.evidenceDir,
@@ -175,6 +187,8 @@ async function main() {
     timeoutMs: args.timeoutMs ?? 120_000,
     headless: true,
     bootstrapSession: (adapter: PlaywrightSurfaceAdapter) => loginToTargetApp(adapter.getPage(), baseUrl),
+    suspendAndWaitForResume: args.waitForHandoff,
+    resumeTimeoutMs: args.resumeTimeoutMs,
   });
 
   console.log(JSON.stringify(result, null, 2));

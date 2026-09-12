@@ -1,7 +1,7 @@
 {
-  "interventionId": "d619075f-a794-403a-b368-3815d12635f8",
-  "runId": "67fd4990-02c7-406f-8fd4-06e6e006015a",
-  "sessionId": "67fd4990-02c7-406f-8fd4-06e6e006015a",
+  "interventionId": "a19cd54e-84e7-4a14-852f-338dd1f507a2",
+  "runId": "49201c39-021b-47bf-8d21-073d3883938e",
+  "sessionId": "49201c39-021b-47bf-8d21-073d3883938e",
   "capabilityId": "member.read-savings-balance",
   "goal": "Looks up a member by identifier and returns their current savings account balance.",
   "stepId": "open-accounts",
@@ -13,8 +13,8 @@
     "act",
     "resume"
   ],
-  "createdAt": "2026-09-12T14:55:52.304Z",
+  "createdAt": "2026-09-12T20:14:41.505Z",
   "status": "resolved",
   "claimedBy": "operator-1",
-  "resolutionNote": "Verified this was a routine compliance flag, cleared for this account."
+  "resolutionNote": "Regression re-check with correct GET request."
 }

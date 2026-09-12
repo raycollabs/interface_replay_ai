@@ -354,6 +354,75 @@ prove the mechanism).
 
   `REPORT.md` drafted from this point on, not written cold at the end.
 
+  **A real gap closed on review**, requirement 3.6's own three named
+  triggers ("the agent is stuck during discovery, a replay hits a
+  condition it can't recover from, or a risky/irreversible step needs a
+  person to decide"). The second and third were solidly built and
+  live-verified above and in the 3.4 gap closure; the first -- discovery
+  getting stuck -- was not. `runDiscovery()`'s every stuck path
+  (`TIMEOUT`, `REPEATED_STATE`, `MAX_STEPS`, the model calling
+  `request_human()` itself) wrote a `stuck` trace summary and closed the
+  browser in a `finally` block, indistinguishable from a hard `failed`
+  run: no `intervention.json`, no `session-handle.json`, and the browser
+  already gone by the time anyone could react -- structurally impossible
+  to hand off, not just unimplemented. `InterventionRequestSchema` had
+  already been designed for this (`capabilityId` and `goal` as separate
+  optional fields, an unused `observationRef`) but nothing ever exercised
+  that half of it.
+
+  Closed by giving discovery its own `escalateDiscovery()` (`src/
+  discovery/loop.ts`), reusing `writeIntervention`/`writeSessionHandle`/
+  `waitForResolution` from `src/session/broker.ts` verbatim rather than
+  re-implementing the mechanism a second time. Opt-in via
+  `--wait-for-handoff` on `scripts/discover.ts` (mirroring `replay.ts`'s
+  own flag exactly), so the default one-shot CLI behavior --
+  `--auto-compile`'s pipeline included, which has no operator standing by
+  -- is unchanged. Each stuck condition resumes into its OWN fix, not a
+  generic retry: a resumed `TIMEOUT` gets a fresh deadline, a resumed
+  `MAX_STEPS` gets a fresh step budget, a resumed `REPEATED_STATE` resets
+  the repeat counter -- all three needed the `for` loop's own bound
+  restructured from the loop's condition into an in-body check (mirroring
+  how the deadline check already worked) so `MAX_STEPS` could be extended
+  rather than being a hard ceiling the loop physically couldn't exceed.
+  One trigger stayed deliberately unescalated: `ENTRY_ROUTE_BLOCKED` (and
+  a mid-run `policy_denied`) is a containment-boundary failure, not a
+  live-page obstacle -- there's nothing on screen to act on, and routing
+  it to a human would invite working around the boundary rather than
+  honoring it.
+
+  The operator console (`scripts/operator-console.ts`) needed a real
+  extension, not a workaround: discovery has no capability artifact yet,
+  so there's no `targetRegistry` for a `targetPurpose`-based quick-action
+  to resolve against. `--capability`/`--version` are now optional, and a
+  new `/act-by-text` endpoint clicks by raw visible text instead (the
+  same last-resort mechanism the targeting ladder's own `visible_text`
+  rung already uses) -- weaker than a semantic purpose, but a real click
+  on the real live session, not a simulation. Works for a replay
+  intervention too; verified by closing a real sub-account
+  (`member.close-sub-account`) through `/act-by-text` instead of the
+  original `targetPurpose`-based `/act`, confirming the new path and the
+  old one both still work.
+
+  Live-verified end to end, repeatedly: a genuine LLM-driven discovery
+  run forced into `TIMEOUT` on its first check (`--timeout-ms 100`, small
+  enough that browser launch + login alone exceeds it) suspended with a
+  real `intervention.json`/`session-handle.json`; the operator console
+  (no `--capability` given) correctly showed "Discovery goal" instead of
+  "Capability" and omitted the capability-specific quick-action, keeping
+  only the generic form. Resumed four separate times through the same
+  live session (the artificially tiny timeout kept re-firing, which
+  incidentally proved the mechanism survives repeated suspend/resume
+  cycles without drift or corruption) -- automation continued between
+  each one (real `type`/`click` trace entries, not no-ops) and the run
+  *completed the original goal for real* afterward: `status: "success"`,
+  the correct member's real balance, memberId correctly `[REDACTED]` in
+  the summary. `events.jsonl` shows four clean `INTERVENTION_REQUESTED ->
+  CONTROL_TRANSFERRED(HUMAN) -> HUMAN_ACTION -> CONTROL_TRANSFERRED
+  (AUTOMATION) -> AUTOMATION_RESUMED` cycles. The original Slice 5 demo
+  (member 33333, `targetPurpose`-based `/act`) re-verified unaffected
+  afterward. 72/72 unit tests green throughout. Redaction re-verified
+  clean across every new and touched evidence directory.
+
 - [x] **Slice 6 — Discovery loop.** `observeWithMarks()` (moved from
   Slice 2 as planned — replay never needs it): every interactive element
   in the top frame and named child frames gets a `data-discovery-mark`

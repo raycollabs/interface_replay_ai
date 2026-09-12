@@ -1,5 +1,5 @@
 {
-  "runId": "67fd4990-02c7-406f-8fd4-06e6e006015a",
+  "runId": "49201c39-021b-47bf-8d21-073d3883938e",
   "capabilityId": "member.read-savings-balance",
   "capabilityVersion": 1,
   "inputs": {
@@ -19,11 +19,11 @@
   ],
   "operatorNotes": [
     {
-      "timestamp": "2026-09-12T14:55:56.886Z",
+      "timestamp": "2026-09-12T20:14:46.599Z",
       "operatorId": "operator-1",
-      "note": "Verified this was a routine compliance flag, cleared for this account."
+      "note": "Regression re-check with correct GET request."
     }
   ],
-  "createdAt": "2026-09-12T14:55:52.079Z",
-  "updatedAt": "2026-09-12T14:55:57.025Z"
+  "createdAt": "2026-09-12T20:14:41.283Z",
+  "updatedAt": "2026-09-12T20:14:46.756Z"
 }

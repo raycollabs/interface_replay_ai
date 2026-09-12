@@ -1,0 +1,19 @@
+{
+  "interventionId": "e19544fb-069e-4c23-90a2-6345d1c5f612",
+  "runId": "574624f1-2afc-4e9b-a262-cc758bf4e582",
+  "sessionId": "574624f1-2afc-4e9b-a262-cc758bf4e582",
+  "goal": "Look up member {{inputs.memberId}} and read their current savings balance",
+  "stepId": "discovery-step-7",
+  "reasonCode": "TIMEOUT",
+  "explanation": "Discovery exceeded its wall-clock timeout (100ms) without completing the goal.",
+  "screenshotRef": "evidence/discovery-handoff-demo/escalation-step-07.png",
+  "observationRef": "evidence/discovery-handoff-demo/escalation-step-07.png",
+  "allowedHumanActions": [
+    "view",
+    "act-by-text",
+    "resume"
+  ],
+  "createdAt": "2026-09-12T20:09:11.618Z",
+  "status": "resolved",
+  "resolutionNote": "continuing"
+}
