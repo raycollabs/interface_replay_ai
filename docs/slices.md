@@ -210,6 +210,24 @@ prove the mechanism).
   value string; `PlaywrightSurfaceAdapter`'s discovery methods substitute
   it at the surface boundary, same as replay.
 
+  **Gap closed on review**: requirement 3.1 asks the loop to "accept a
+  goal + a target (app/URL/entry point) as input." The goal always was a
+  real CLI input; the target/entry-point originally weren't — the base
+  URL only came from an environment variable (no `--target` flag existed
+  at all), and the entry point was implicit in `scripts/discover.ts`'s
+  login helper hardcoding a wait for `/member-search` specifically. Fixed
+  by making both first-class: `--target-url` and `--entry-route` are now
+  real flags, `DiscoveryOptions.entryRoute` is a required field on the
+  loop itself, and `runDiscovery()` navigates to it explicitly (a
+  policy-checked action, same as everything else) rather than inferring
+  "wherever login happened to land" as the starting point. Login
+  (`loginToTargetApp`) now only authenticates and waits to leave
+  `/login` — it no longer knows or cares what page comes after. Verified
+  live with a genuine discovery run supplying both flags explicitly
+  (`--target-url http://localhost:4173 --entry-route /member-search`,
+  `evidence/discovery-run-explicit-target/`) — correct member-specific
+  output, redaction clean.
+
   Gate (`npm run discover`): a genuine Sonnet 5 run completed "look up
   member {{inputs.memberId}} and read their savings balance" against the
   live target app in 4 steps (type, click, click, finish), correctly

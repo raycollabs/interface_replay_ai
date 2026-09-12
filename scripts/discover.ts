@@ -36,15 +36,19 @@ function parseArgs(argv: string[]) {
   const args: {
     goal?: string;
     evidenceDir?: string;
+    targetUrl?: string;
+    entryRoute: string;
     input: Record<string, string>;
     sensitiveInputs: string[];
     maxSteps?: number;
     timeoutMs?: number;
-  } = { input: {}, sensitiveInputs: [] };
+  } = { input: {}, sensitiveInputs: [], entryRoute: '/member-search' };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--goal') args.goal = argv[++i];
     else if (arg === '--evidence-dir') args.evidenceDir = argv[++i];
+    else if (arg === '--target-url') args.targetUrl = argv[++i];
+    else if (arg === '--entry-route') args.entryRoute = argv[++i]!;
     else if (arg === '--max-steps') args.maxSteps = Number(argv[++i]);
     else if (arg === '--timeout-ms') args.timeoutMs = Number(argv[++i]);
     else if (arg === '--sensitive-input') args.sensitiveInputs.push(argv[++i]!);
@@ -57,18 +61,28 @@ function parseArgs(argv: string[]) {
   return args;
 }
 
+/**
+ * Authentication only -- does NOT assume or wait for any particular
+ * post-login route. Where discovery actually starts observing is a
+ * separate, explicit navigation to --entry-route inside runDiscovery()
+ * itself (src/discovery/loop.ts), not inferred from wherever this
+ * redirect happens to land. That's what makes the entry point a real,
+ * independent input rather than a side effect of the login flow.
+ */
 async function loginToTargetApp(page: Page, baseUrl: string) {
   await page.goto(`${baseUrl}/login`, { waitUntil: 'domcontentloaded' });
   await page.locator('input[name=username]').fill(process.env.TARGET_APP_USERNAME ?? 'operator');
   await page.locator('input[name=password]').fill(process.env.TARGET_APP_PASSWORD ?? 'demo-pass-1234');
   await page.locator('button[type=submit]').click();
-  await page.waitForURL('**/member-search');
+  await page.waitForURL((url) => !url.pathname.endsWith('/login'));
 }
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (!args.goal || !args.evidenceDir) {
-    console.error('Usage: discover --goal "<goal>" --evidence-dir <path> [--input k=v ...] [--sensitive-input NAME ...]');
+    console.error(
+      'Usage: discover --goal "<goal>" --evidence-dir <path> [--target-url <url>] [--entry-route </path>] [--input k=v ...] [--sensitive-input NAME ...]',
+    );
     process.exitCode = 1;
     return;
   }
@@ -80,26 +94,33 @@ async function main() {
     return;
   }
 
-  const baseUrl = process.env.TARGET_APP_BASE_URL ?? 'http://localhost:4173';
+  // The target: --target-url is the genuine input; the env var is only a
+  // convenience default so the common case doesn't require typing it.
+  const baseUrl = args.targetUrl ?? process.env.TARGET_APP_BASE_URL ?? 'http://localhost:4173';
 
   // Deliberately narrow scope for discovery -- the concrete containment
   // boundary discussed in policy.ts's docs: no money-moving route is
   // even declared, so the model exploring freely cannot reach one
-  // regardless of what it decides to try.
+  // regardless of what it decides to try. args.entryRoute is folded in
+  // explicitly so an arbitrary caller-chosen entry point isn't silently
+  // blocked by a fixed list that only anticipated this one demo's routes.
+  const allowedRoutes = new Set(['/login', '/member-search', '/member/*', '/member/*/accounts', '/member/*/accounts-frame']);
+  allowedRoutes.add(args.entryRoute);
   const policyCtx: PolicyContext = {
     allowlist: {
       allowedOrigins: [baseUrl],
-      allowedRoutes: ['/login', '/member-search', '/member/*', '/member/*/accounts', '/member/*/accounts-frame'],
+      allowedRoutes: [...allowedRoutes],
       allowedActionTypes: ['navigate', 'click', 'type', 'extract'],
       unattendedRiskCeiling: 'safe_reversible',
     },
     mode: 'UNATTENDED',
   };
 
-  console.log(`mode=DISCOVERY goal="${args.goal}"`);
+  console.log(`mode=DISCOVERY goal="${args.goal}" target=${baseUrl} entryRoute=${args.entryRoute}`);
 
   const result = await runDiscovery({
     evidenceDir: args.evidenceDir,
+    entryRoute: args.entryRoute,
     goal: args.goal,
     baseUrl,
     inputs: args.input,

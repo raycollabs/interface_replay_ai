@@ -1,0 +1,10 @@
+{
+  "status": "success",
+  "outputs": {
+    "savings_balance": "9310.25",
+    "currency": "USD",
+    "account_id": "SAV-40988"
+  },
+  "summary": "Looked up member (Marisol Vega, ID [REDACTED]) and found their Savings account SAV-40988 with a current balance of 9310.25 USD.",
+  "steps": 4
+}

@@ -281,9 +281,20 @@ target app running:
 ```bash
 npm run discover -- \
   --goal "Look up member {{inputs.memberId}} and read their current savings balance" \
+  --target-url http://localhost:4173 --entry-route /member-search \
   --input memberId=12345 --sensitive-input memberId \
   --evidence-dir evidence/discovery-run
 ```
+
+`--target-url` and `--entry-route` are genuine inputs, not environment
+defaults dressed up as parameters — the loop navigates to `--entry-route`
+explicitly and by name (`runDiscovery()` in `src/discovery/loop.ts`)
+rather than assuming wherever the login flow's own redirect happens to
+land. Both default sensibly (`TARGET_APP_BASE_URL` env var or
+`http://localhost:4173`; `/member-search`) if omitted. On git-bash/MSYS,
+prefix with `MSYS_NO_PATHCONV=1` or the leading `/` in `--entry-route`
+gets mangled into a Windows path (same issue as `--route` on
+`npm run inspect`, see above).
 
 Note the goal uses the same `{{inputs.NAME}}` placeholder convention as a
 `type` action -- the loop refuses to launch at all if a goal contains a

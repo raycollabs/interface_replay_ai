@@ -9,7 +9,20 @@ import { appendTraceEntry, writeTraceSummary } from './trace.js';
 export interface DiscoveryOptions {
   evidenceDir: string;
   goal: string;
+  /** The target: which app/URL discovery runs against. A genuine input
+   *  to the loop, not an environment default the caller happens to read
+   *  -- see scripts/discover.ts's --target-url flag. */
   baseUrl: string;
+  /**
+   * The entry point: where observation starts, e.g. "/member-search".
+   * Navigated to explicitly, here, after bootstrapSession -- NOT
+   * inferred from wherever a login flow happens to redirect. Closes a
+   * real gap: earlier, the CLI's login helper hardcoded a wait for
+   * "/member-search" specifically, which meant the entry point was
+   * whatever the login redirect happened to land on, not something a
+   * caller could actually choose.
+   */
+  entryRoute: string;
   inputs: Record<string, unknown>;
   /** Declares which inputs are sensitive -- reused across
    *  redaction and to decide what the model is told exists. */
@@ -65,6 +78,19 @@ export async function runDiscovery(opts: DiscoveryOptions): Promise<DiscoveryRes
   const adapter = new PlaywrightSurfaceAdapter(opts.baseUrl, { headless: opts.headless ?? true });
   await adapter.launch();
   if (opts.bootstrapSession) await opts.bootstrapSession(adapter);
+
+  // The entry point is navigated to explicitly and by name, here -- not
+  // assumed from wherever bootstrapSession's own login redirect happens
+  // to land. This is the actual "accept ... a target (app/URL/entry
+  // point) as input" requirement; the entry route is a real parameter,
+  // and this is the one place it's acted on.
+  const entryOutcome = await adapter.performDiscoveryNavigate(opts.entryRoute, opts.policyCtx);
+  if (entryOutcome.kind !== 'executed') {
+    const result: DiscoveryResult = { status: 'stuck', reason: `ENTRY_ROUTE_BLOCKED: ${JSON.stringify(entryOutcome)}`, steps: 0 };
+    writeTraceSummary(opts.evidenceDir, result);
+    await adapter.close();
+    return result;
+  }
 
   const model = new DiscoveryModel(opts.apiKey, Object.keys(opts.inputs));
   const page = adapter.getPage();
