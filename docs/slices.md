@@ -33,16 +33,32 @@ prove the mechanism).
   the target level, since frame context applies to every candidate
   strategy for a control, not just the structural one.
 
-- [ ] **Slice 2 — Surface adapter + policy.** Out-of-process Playwright
-  browser (headed, stable `sessionId` — built now so Slice 5's handoff is
-  additive, not a retrofit). `observe()` with set-of-marks grounding,
-  `resolveTarget()` (ladder rungs 2/3/5), `perform()` with the policy check
-  *inside it* (no other path to the surface), `extract()`,
-  `captureEvidence()` with CSS-masked screenshots for sensitive fields.
-  Placeholder substitution (`{{inputs.memberId}}` -> real value) happens
-  here, below the logging boundary. Gate: a hardcoded step array drives
-  the happy path end-to-end with zero LLM; an out-of-allowlist navigation
-  is refused; no raw `memberId` appears anywhere under `/evidence/`.
+- [x] **Slice 2 — Surface adapter + policy.** Out-of-process Playwright
+  browser (`launchServer`+`connect`, stable `wsEndpoint` — built now so
+  Slice 5's handoff is additive, not a retrofit; headless by default,
+  flipped for the actual handoff demo). `resolveTarget()` implementing
+  the ladder (rungs 2/3/5 exercised for real against the target app;
+  6/7 implemented but not yet exercised by any capability), `perform()`
+  with the policy check *inside it* (no other path to the surface),
+  `checkCondition`/`waitForCondition` (the one form of waiting anywhere —
+  no unconditional sleeps), `captureEvidenceScreenshot()` masking
+  sensitive-bound controls in the live DOM immediately before the
+  screenshot. Placeholder substitution happens inside `perform()`, below
+  the logging boundary.
+  Gate (`npm run smoke:adapter`): a hardcoded step sequence sourced from
+  the artifact drives the real target app end-to-end with zero LLM and
+  zero replay engine — login, search, navigate, extract, checkpoint. The
+  member-ID field's rung-1 (role_and_name) candidate genuinely fails to
+  resolve (no label association in the real markup) and the ladder falls
+  through to rung 2 (associated_label) for real, exactly as the
+  artifact's own rationale predicted. An out-of-allowlist route is denied
+  before a browser is even launched.
+  Scope correction from the original plan: `observe()`'s set-of-marks
+  grounding (numbered badges + `ObservedControl[]` inventory) is a
+  discovery-time concern only — deterministic replay resolves declared
+  target strategies directly and never needs to enumerate or number
+  controls for a model to choose from. Moved into Slice 6, where it's
+  actually needed, rather than building it ahead of any consumer.
 
 - [ ] **Slice 3 — Replay engine + run state. The walking skeleton.** The
   hardcoded array becomes artifact-driven. Step loop, precondition /
@@ -72,13 +88,17 @@ prove the mechanism).
   log shows `AUTOMATION -> NONE -> HUMAN -> NONE -> AUTOMATION`.
   `REPORT.md` drafted from this point on, not written cold at the end.
 
-- [ ] **Slice 6 — Discovery loop.** Claude, native tool use, forced
-  `tool_choice`, prompt caching on the static prefix, images truncated to
-  the last 2-3 turns, stop conditions (max steps / timeout / repeated
-  state). *(Opus fork for the tool/prompt design pass — this is the one
-  genuinely open-ended slice.)* Gate: one real run completes the goal
-  against the live target app; evidence saved. This is the one thing that
-  cannot be faked, per the brief — banked before further polish.
+- [ ] **Slice 6 — Discovery loop.** `observe()`'s set-of-marks grounding
+  (numbered badges over interactive controls + `ObservedControl[]`
+  inventory) lands here — moved from Slice 2, since replay never needs it
+  and building it ahead of its only consumer would have been speculative.
+  Claude, native tool use, forced `tool_choice`, prompt caching on the
+  static prefix, images truncated to the last 2-3 turns, stop conditions
+  (max steps / timeout / repeated state). *(Opus fork for the tool/prompt
+  design pass — this is the one genuinely open-ended slice.)* Gate: one
+  real run completes the goal against the live target app; evidence
+  saved. This is the one thing that cannot be faked, per the brief —
+  banked before further polish.
 
 - [ ] **Slice 7 — Compiler + verification gate.** Trace -> artifact.
   Compile-time uniqueness assertion (ambiguity must not reach production).

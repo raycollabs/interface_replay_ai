@@ -10,7 +10,8 @@
     "test:watch": "vitest",
     "validate:artifacts": "tsx scripts/validate-artifacts.ts",
     "emit:jsonschema": "tsx scripts/emit-json-schema.ts",
-    "target-app": "tsx target-app/server.ts"
+    "target-app": "tsx target-app/server.ts",
+    "smoke:adapter": "tsx scripts/smoke-adapter.ts"
   },
   "dependencies": {
     "cookie-parser": "^1.4.7",

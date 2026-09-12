@@ -9,9 +9,10 @@ human when it can't safely proceed.
 > The model discovers. The artifact becomes a reusable capability.
 > Deterministic replay is how an AI agent invokes it in production.
 
-Build status: **Slice 1 of 9 complete** (contracts, target app). See
-[`docs/slices.md`](docs/slices.md) for the full plan and current progress,
-and `REPORT.md` (added from Slice 5) for the design write-up.
+Build status: **Slice 2 of 9 complete** (contracts, target app, surface
+adapter + policy). See [`docs/slices.md`](docs/slices.md) for the full plan
+and current progress, and `REPORT.md` (added from Slice 5) for the design
+write-up.
 
 ## Setup
 
@@ -65,6 +66,21 @@ npm run target-app
 ```
 
 Then in a browser: `/login` -> `/member-search` -> search `12345` -> `/member/12345` -> "Accounts" link -> savings balance renders inside the accounts iframe. Any other member ID currently 404s with a not-found banner (business-outcome handling for this is wired up in Slice 4).
+
+## Running the Slice 2 gate (adapter + policy, no replay engine yet)
+
+With the target app running in another terminal:
+```bash
+npm run smoke:adapter
+```
+Drives the real Playwright adapter through the artifact's step sequence
+against the live app -- login, search, navigate, extract, checkpoint --
+with zero LLM and zero replay engine involved. Confirms an out-of-allowlist
+route is denied before a browser even launches, and that the member-ID
+field's targeting genuinely falls through from role_and_name to the
+associated_label heuristic (the real markup has no label association).
+Screenshot evidence lands in `tmp/` (gitignored dev scratch -- curated
+`/evidence/` directories start with Slice 3's replay engine).
 
 ## Demo path (grows per slice)
 

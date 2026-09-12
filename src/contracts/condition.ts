@@ -35,6 +35,11 @@ export const ConditionSchema: z.ZodType<Condition> = z.lazy(() =>
     z.object({
       type: z.literal('controlHasValue'),
       semanticPurpose: SemanticPurposeSchema,
+      /** May contain `{{inputs.NAME}}` placeholders, substituted against
+       *  the run's actual input values at evaluation time (see
+       *  src/surface/placeholders.ts) — this is how a postcondition can
+       *  assert "the field now holds what we typed" without the artifact
+       *  itself ever containing a real input value. */
       equals: z.string(),
     }),
     z.object({ type: z.literal('urlMatches'), pattern: z.string().min(1) }),
