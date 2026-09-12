@@ -9,11 +9,11 @@ human when it can't safely proceed.
 > The model discovers. The artifact becomes a reusable capability.
 > Deterministic replay is how an AI agent invokes it in production.
 
-Build status: **Slice 5 of 9 complete** (contracts, target app, surface
+Build status: **Slice 6 of 9 complete** (contracts, target app, surface
 adapter + policy, deterministic replay engine, recoverable conditions,
-session broker + human handoff). See [`docs/slices.md`](docs/slices.md)
-for the full plan and current progress, and `REPORT.md` (in progress) for
-the design write-up.
+session broker + human handoff, genuine LLM-driven discovery). See
+[`docs/slices.md`](docs/slices.md) for the full plan and current progress,
+and `REPORT.md` (in progress) for the design write-up.
 
 ## Setup
 
@@ -137,6 +137,27 @@ Acknowledge and escalate" acts on the live session, and Resume (with an
 optional note) hands control back. Terminal 1 then re-grounds and
 completes on its own. `evidence/replay-handoff/events.jsonl` records the
 full `AUTOMATION -> HUMAN -> AUTOMATION` transfer with real timestamps.
+
+## Discovery (genuine LLM-driven run)
+
+Requires `ANTHROPIC_API_KEY` in `.env` (copy `.env.example`). With the
+target app running:
+
+```bash
+npm run discover -- \
+  --goal "Look up member {{inputs.memberId}} and read their current savings balance" \
+  --input memberId=12345 --sensitive-input memberId \
+  --evidence-dir evidence/discovery-run
+```
+
+Note the goal uses the same `{{inputs.NAME}}` placeholder convention as a
+`type` action -- the loop refuses to launch at all if a goal contains a
+raw sensitive value verbatim (see `docs/slices.md`'s Slice 6 entry for
+why that check exists: it's there because a raw value leaked once).
+`evidence/discovery-run/trace.jsonl` records every observation, decision,
+and action; `summary.json` has the final result. Prints `mode=DISCOVERY`
+and completes in a handful of steps against the live app -- no
+pre-existing artifact involved.
 
 Each writes `run-state.json`, `events.jsonl`, `result.json`, and a
 screenshot into its `--evidence-dir`. `memberId` is declared `sensitive`

@@ -1,4 +1,4 @@
-import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
+import { chromium, type Browser, type BrowserContext, type Locator, type Page } from 'playwright';
 import type { CapabilityDefinition, CapabilityStep } from '../contracts/index.js';
 import { evaluatePolicy, type PolicyContext } from '../policy/allowlist.js';
 import { resolveTarget } from './resolveTarget.js';
@@ -183,5 +183,71 @@ export class PlaywrightSurfaceAdapter {
       default:
         return { kind: 'executed' };
     }
+  }
+
+  /**
+   * Discovery-time actions (Slice 6). Same policy choke point as
+   * perform() -- there is no discovery-specific bypass -- but resolution
+   * is by mark number (set-of-marks, src/discovery/setOfMarks.ts) rather
+   * than a capability's declared targetRegistry, because during
+   * discovery there is no capability yet; that's the thing being
+   * produced. Risk-class gating is not applied per-action here (raw
+   * discovery has no declared riskClass to check) -- containment instead
+   * relies on the SAME origin/route/actionType allowlist every other
+   * action goes through, kept deliberately narrow for a discovery goal
+   * (see docs/slices.md's Slice 6 entry and REPORT.md's Safety section
+   * for why this is an accepted, documented limit rather than a silent
+   * gap).
+   */
+  async performDiscoveryNavigate(route: string, policyCtx: PolicyContext): Promise<PerformOutcome> {
+    const page = this.getPage();
+    const targetUrl = new URL(route, this.baseUrl).toString();
+    const decision = evaluatePolicy({ actionType: 'navigate', targetUrl, route }, policyCtx);
+    if (decision.decision === 'deny') return { kind: 'policy_denied', reason: decision.reason };
+    if (decision.decision === 'require_human') return { kind: 'require_human', reason: decision.reason };
+    await page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
+    return { kind: 'executed' };
+  }
+
+  async performDiscoveryClick(locator: Locator, policyCtx: PolicyContext): Promise<PerformOutcome> {
+    const page = this.getPage();
+    const decision = evaluatePolicy({ actionType: 'click', route: this.currentRoute() }, policyCtx);
+    if (decision.decision === 'deny') return { kind: 'policy_denied', reason: decision.reason };
+    if (decision.decision === 'require_human') return { kind: 'require_human', reason: decision.reason };
+
+    const urlBefore = page.url();
+    await locator.click();
+    const urlAfter = page.url();
+    if (urlAfter !== urlBefore) {
+      const postDecision = evaluatePolicy(
+        { actionType: 'navigate', targetUrl: urlAfter, route: new URL(urlAfter).pathname },
+        policyCtx,
+      );
+      if (postDecision.decision === 'deny') return { kind: 'policy_denied', reason: `post-click navigation: ${postDecision.reason}` };
+      if (postDecision.decision === 'require_human') return { kind: 'require_human', reason: `post-click navigation: ${postDecision.reason}` };
+    }
+    return { kind: 'executed' };
+  }
+
+  async performDiscoveryType(
+    locator: Locator,
+    rawValue: string,
+    inputs: Record<string, unknown>,
+    policyCtx: PolicyContext,
+  ): Promise<PerformOutcome> {
+    const decision = evaluatePolicy({ actionType: 'type', route: this.currentRoute() }, policyCtx);
+    if (decision.decision === 'deny') return { kind: 'policy_denied', reason: decision.reason };
+    if (decision.decision === 'require_human') return { kind: 'require_human', reason: decision.reason };
+    const value = substitutePlaceholders(rawValue, inputs);
+    await locator.fill(value);
+    return { kind: 'executed' };
+  }
+
+  async performDiscoveryExtract(locator: Locator, policyCtx: PolicyContext): Promise<PerformOutcome> {
+    const decision = evaluatePolicy({ actionType: 'extract', route: this.currentRoute() }, policyCtx);
+    if (decision.decision === 'deny') return { kind: 'policy_denied', reason: decision.reason };
+    if (decision.decision === 'require_human') return { kind: 'require_human', reason: decision.reason };
+    const text = (await locator.innerText()).trim();
+    return { kind: 'executed', extractedText: text };
   }
 }

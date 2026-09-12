@@ -13,13 +13,15 @@
     "target-app": "tsx target-app/server.ts",
     "smoke:adapter": "tsx scripts/smoke-adapter.ts",
     "replay": "tsx scripts/replay.ts",
-    "operator": "tsx scripts/operator-console.ts"
+    "operator": "tsx scripts/operator-console.ts",
+    "discover": "tsx scripts/discover.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.125.0",
     "cookie-parser": "^1.4.7",
     "express": "^5.2.1",
     "playwright": "^1.63.0",
-    "zod": "3.23.8",
+    "zod": "^3.25.0",
     "zod-to-json-schema": "3.23.2"
   },
   "devDependencies": {

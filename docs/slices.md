@@ -191,17 +191,65 @@ prove the mechanism).
 
   `REPORT.md` drafted from this point on, not written cold at the end.
 
-- [ ] **Slice 6 — Discovery loop.** `observe()`'s set-of-marks grounding
-  (numbered badges over interactive controls + `ObservedControl[]`
-  inventory) lands here — moved from Slice 2, since replay never needs it
-  and building it ahead of its only consumer would have been speculative.
-  Claude, native tool use, forced `tool_choice`, prompt caching on the
-  static prefix, images truncated to the last 2-3 turns, stop conditions
-  (max steps / timeout / repeated state). *(Opus fork for the tool/prompt
-  design pass — this is the one genuinely open-ended slice.)* Gate: one
-  real run completes the goal against the live target app; evidence
-  saved. This is the one thing that cannot be faked, per the brief —
-  banked before further polish.
+- [x] **Slice 6 — Discovery loop.** `observeWithMarks()` (moved from
+  Slice 2 as planned — replay never needs it): every interactive element
+  in the top frame and named child frames gets a `data-discovery-mark`
+  attribute and a numbered visual badge (top frame only — badging across
+  an iframe boundary needs coordinate translation not worth the
+  complexity for one iframe); the model refers to controls only by mark
+  number. Claude (Sonnet 5, standard effort — this is a narrow one-tool-
+  from-six-options decision per turn, not deep multi-step reasoning, so a
+  large thinking budget would mostly add latency/cost across ~15 turns
+  without a quality gain), native tool use with `tool_choice: {type:
+  "any"}` forcing exactly one call per turn, prompt caching on the system
+  prompt and tool definitions, screenshots truncated to the last 2 turns.
+  Stop conditions: max steps, wall-clock timeout, repeated state
+  fingerprint, model-initiated `finish`/`request_human`, policy denial.
+  The `{{inputs.NAME}}` placeholder mechanism is real here too: the model
+  is told input NAMES only and types `{{inputs.memberId}}` as a literal
+  value string; `PlaywrightSurfaceAdapter`'s discovery methods substitute
+  it at the surface boundary, same as replay.
+
+  Gate (`npm run discover`): a genuine Sonnet 5 run completed "look up
+  member {{inputs.memberId}} and read their savings balance" against the
+  live target app in 4 steps (type, click, click, finish), correctly
+  reporting balance/account-id/currency matching the fixture. This is the
+  one thing the brief says cannot be faked.
+
+  Two real things caught by reading the evidence, not by the run merely
+  "succeeding":
+  - **The goal text itself leaked the raw value.** First attempt phrased
+    the goal as "Look up member 12345..." (a natural thing to type) --
+    the model dutifully echoed "12345" back in its own `finish()` output
+    and summary, and neither `summary.json` nor the CLI's own stdout was
+    redacted at that boundary (only the per-step trace already was).
+    Fixed at both ends: the goal must use the same `{{inputs.NAME}}`
+    placeholder convention as a `type` action (`runDiscovery` now
+    refuses to even launch a browser if the goal contains a raw
+    sensitive value verbatim, rather than trusting every caller to
+    remember), and every terminal result (`finish`, `request_human`) is
+    now redacted before it's written or returned, not just the trace.
+  - **The placeholder mechanism has a real, unavoidable limit.** Even
+    after that fix, the model's summary still originally contained the
+    raw member ID -- because it never called `extract()` on it at all.
+    The trace shows only `type -> click -> click -> finish`: the model
+    read the member's name and ID directly off the *screenshot* (the
+    target app's own member-detail page renders `Member: Jordan Alvarez
+    (12345)`, a realistic thing for a real banking app to do), which is
+    a vision channel the placeholder substitution never touches. The
+    control-plane protection (nothing WE construct -- goal, tool
+    results, logs -- ever contains the raw value) holds; it cannot
+    prevent a vision-capable agent from reading whatever the target
+    application itself renders back on screen, which is a distinct,
+    documented limit (REPORT.md Safety), mitigated by redacting every
+    output at the persistence boundary rather than by pretending the
+    model never saw it.
+  - Consequence for Slice 7: since the model never issued an explicit
+    `extract` action, the raw trace contains no extraction step to
+    compile from -- confirming (not just motivating in the abstract) why
+    the compiler needs a second pass to synthesize the checkpoint and
+    output-extraction steps from final page state, rather than a
+    mechanical trace replay.
 
 - [ ] **Slice 7 — Compiler + verification gate.** Trace -> artifact.
   Compile-time uniqueness assertion (ambiguity must not reach production).
