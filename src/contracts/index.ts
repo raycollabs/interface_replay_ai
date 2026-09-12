@@ -7,3 +7,4 @@ export * from './runState.js';
 export * from './policy.js';
 export * from './intervention.js';
 export * from './events.js';
+export * from './tenantBinding.js';

@@ -46,6 +46,10 @@ export interface ReplayOptions {
   /** How long to wait for an operator to resolve the intervention before
    *  giving up and failing with ESCALATION_UNAVAILABLE. Default 10 min. */
   resumeTimeoutMs?: number;
+  /** Additional resolution-chain entries (e.g. which TenantBinding was
+   *  applied) appended after the base capability's own entry in
+   *  RunState.resolvedFrom -- see src/multitenant/resolve.ts. */
+  resolvedFromExtra?: string[];
 }
 
 function nowIso(): string {
@@ -179,7 +183,10 @@ export class ReplayRun {
       status: 'PENDING',
       mode: opts.mode,
       lease: { owner: 'AUTOMATION', leaseId: null, heldSince: nowIso(), ttlMs: 300000 },
-      resolvedFrom: [`${capability.product.vendor}/${capability.capabilityId}@${capability.version}`],
+      resolvedFrom: [
+        `${capability.product.vendor}/${capability.capabilityId}@${capability.version}`,
+        ...(opts.resolvedFromExtra ?? []),
+      ],
       operatorNotes: [],
       createdAt: nowIso(),
       updatedAt: nowIso(),

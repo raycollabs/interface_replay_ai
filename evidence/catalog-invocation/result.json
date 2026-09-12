@@ -1,0 +1,9 @@
+{
+  "status": "success",
+  "outputs": {
+    "balance": "4235.67",
+    "currency": "USD",
+    "accountId": "SAV-88213"
+  },
+  "evidenceRef": "evidence/catalog-invocation"
+}

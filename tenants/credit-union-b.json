@@ -1,0 +1,29 @@
+{
+  "tenantId": "credit-union-b",
+  "applicationInstanceId": "member-servicing-console-b",
+  "baseCapabilityId": "member.read-savings-balance",
+  "baseCapabilityVersion": 2,
+  "entryUrl": "http://localhost:4174",
+  "authProfileRef": "secret://credit-union-b/corebank/service-user",
+  "targetOverrides": {
+    "member identifier input": {
+      "candidates": [
+        {
+          "strategy": { "type": "associated_label", "label": "Customer Number" },
+          "rationale": "Tenant B's white-label skin renames this field; same underlying vendor product and table-adjacency markup pattern as the base capability was recorded against.",
+          "confidence": "high"
+        }
+      ]
+    },
+    "accounts navigation": {
+      "candidates": [
+        {
+          "strategy": { "type": "role_and_name", "role": "link", "name": "Products", "exact": true },
+          "rationale": "Tenant B calls the accounts section \"Products\" instead of \"Accounts\" -- same control, same position, different label.",
+          "confidence": "high"
+        }
+      ]
+    }
+  },
+  "featureFlags": {}
+}

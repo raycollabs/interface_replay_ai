@@ -16,7 +16,9 @@
     "operator": "tsx scripts/operator-console.ts",
     "discover": "tsx scripts/discover.ts",
     "compile": "tsx scripts/compile.ts",
-    "promote": "tsx scripts/promote.ts"
+    "promote": "tsx scripts/promote.ts",
+    "replay:tenant": "tsx scripts/replay-tenant.ts",
+    "catalog:demo": "tsx scripts/catalog-demo.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

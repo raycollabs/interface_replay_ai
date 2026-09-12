@@ -309,14 +309,51 @@ prove the mechanism).
   accept manual authoring for these, as v1 demonstrates) rather than
   expect one run to produce a complete error taxonomy.
 
-- [ ] **Slice 8 — Multi-tenant resolution.** Variant B of the target app
-  (different labels/branding). `TenantBinding` JSON, pure
-  `resolveCapability(tenantId, capabilityId)` with a documented precedence
-  merge, `resolvedFrom[]` recorded in run evidence. Gate: the same base
-  capability runs green against both variants via binding overrides only —
-  no re-recording.
+- [x] **Slice 8 — Multi-tenant resolution (stretch).** `TenantBindingSchema`
+  (`src/contracts/tenantBinding.ts`): a binding carries only entry URL,
+  auth profile reference, and `targetOverrides` keyed by the same
+  `semanticPurpose` strings `targetRegistry` uses — it can replace *how*
+  a control is found, never add a step or change the checkpoint.
+  `resolveCapability(base, binding)` (`src/multitenant/resolve.ts`) is a
+  pure function: override replaces a purpose's candidates outright (no
+  field-by-field merge that could leave a stale base candidate silently
+  coexisting with a tenant's), `scope.allowedOrigins` swaps to the
+  binding's `entryUrl`, everything else passes through untouched —
+  verified by asserting non-overridden `targetRegistry` entries, steps,
+  and the checkpoint are `toEqual` the base capability's own.
+  `resolvedFrom[]` now carries the full chain (`ReplayOptions.resolvedFromExtra`),
+  not just the base capability.
 
-- [ ] **Slice 9 — Catalog stretch + docs.** Zod -> JSON Schema -> Claude
-  tool definitions; one invocation by capability name with typed args,
-  closing the loop on "a capability an AI agent can call." Finish
-  `REPORT.md`, `README.md`, `docs/phase-2-scale.md`.
+  Variant B of the target app (`TENANT_VARIANT=B`): same vendor product,
+  different white-label wording ("Customer Number" for "Member ID",
+  "Products" for "Accounts") — a realistic two-credit-unions-one-core-
+  banking-product scenario, not a synthetic difference invented for the
+  demo.
+
+  Gate: the SAME `member.read-savings-balance@2` artifact — recorded via
+  discovery and verified against tenant A on port 4173 — replayed via
+  `credit-union-b`'s binding against variant B on port 4174 (different
+  labels, different port) and returned `status: success` with correct
+  outputs. No re-recording, no re-discovery; five new unit tests
+  (`tests/multitenant/resolve.test.ts`) plus the live cross-tenant run.
+
+- [x] **Slice 9 — Capability catalog (stretch).** `src/catalog/index.ts`
+  turns every `verified`/`approved`, `UNATTENDED`-capable artifact into
+  an Anthropic tool definition, generated from the SAME
+  `CapabilityDefinitionSchema` that validates the artifact on disk — one
+  source of truth for the shape, not a hand-maintained second one.
+  `loadCatalog()` deliberately excludes `draft` artifacts: v1 (hand-
+  authored, still draft) never reaches the catalog; only v2 (verified in
+  Slice 7) does.
+
+  Gate (`npm run catalog:demo`): given the catalog and the plain-language
+  request *"What is member 12345's current savings balance?"*, Claude
+  selected `member_read-savings-balance_v2` and supplied
+  `{"memberId":"12345"}` with no other prompting — genuine tool discovery
+  and typed-argument invocation, not a hardcoded call. Deterministic
+  replay executed it (`llmCalls=0` inside the execution itself); Claude's
+  follow-up turn produced a correct natural-language answer from the real
+  result. Redaction re-verified clean in `evidence/catalog-invocation/`.
+
+  This closes the loop on the brief's own framing for the artifact: "an
+  agent-invocable capability."

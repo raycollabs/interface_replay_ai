@@ -53,7 +53,7 @@ Real defects caught by reading raw evidence rather than trusting a green result,
 
 **Surface abstraction.** `SurfaceAdapter`'s methods are the only things that know what a browser is. `ObservedControl`'s `{role, accessibleName, framePath}` shape is exactly what a desktop UIA tree already exposes, so ladder rungs 2–3 port unchanged; rung 5 becomes a control-tree traversal instead of a DOM table walk; the last rung has no desktop analogue, flagged rather than glossed over.
 
-**Multi-tenant reuse.** The capability belongs to the vendor product, never a tenant — `tenantId` appears nowhere in `CapabilityDefinitionSchema`, by construction. The model: `CapabilityDefinition` (shared across every tenant on that product) → a version-variant layer for vendor releases → a `TenantBinding` carrying only specialization (entry URL, auth ref, small registry overrides keyed by `semanticPurpose`, feature flags — never credentials), resolved tenant → binding → variant → base, with the precedence chain recorded in `RunState.resolvedFrom` for audit. The schema is shaped not to be painted into a corner (`targetRegistry` *is* the override seam); the `TenantBinding` layer itself isn't built here — §7.
+**Multi-tenant reuse — built and verified, not just designed.** The capability belongs to the vendor product, never a tenant — `tenantId` appears nowhere in `CapabilityDefinitionSchema`, by construction. `TenantBinding` carries only specialization (entry URL, auth ref, `targetOverrides` keyed by `semanticPurpose`, feature flags — never credentials); `resolveCapability(base, binding)` is a pure function that replaces a purpose's candidates outright (no field-by-field merge that could leave a stale base candidate silently coexisting with an override) and swaps `scope.allowedOrigins` to the binding's `entryUrl`, leaving steps, checkpoint, and every non-overridden target untouched — asserted directly in tests, not just claimed. Demonstrated live: the same `member.read-savings-balance@2` artifact, recorded and verified against tenant A, replayed successfully against tenant B — a differently-labeled instance of the same vendor product ("Customer Number" for "Member ID", "Products" for "Accounts") on a different port — via the binding alone, no re-recording. The precedence chain lands in `RunState.resolvedFrom` for audit.
 
 **Drift detection already has two signals in the schema.** `recordedRung` — a shift from rung 1 to rung 3 on a later replay is a leading indicator that fires before a capability breaks outright. `provenance.appFingerprint` (hash of the sorted `(role, name)` set at checkpoint, populated in both artifacts in this repo) is the coarser, whole-capability version.
 
@@ -87,12 +87,15 @@ Real defects caught by reading raw evidence rather than trusting a green result,
 
 ## 7. Cuts
 
+Two stretch goals were built rather than left as design-only, since both turned out to be cheap given the schema decisions already made: **multi-tenant resolution** (§4 — `TenantBindingSchema`, `resolveCapability()`, a live cross-tenant replay against a differently-labeled variant) and the **capability catalog** (`src/catalog/index.ts` turns every verified artifact into an Anthropic tool definition from the same Zod schema that validates it on disk; `npm run catalog:demo` shows Claude discovering and invoking `member.read-savings-balance@2` by name with typed arguments from a plain-language request — closing the loop on the brief's own "an agent-invocable capability" framing).
+
+Deliberately still not built, and why:
+
 - **Production session pooling, queues, multi-tenant plumbing** — not rewarded per the brief; `SessionBroker` is the right abstraction at N=1 (see `docs/phase-2-scale.md`).
-- **The `TenantBinding` layer itself** — designed not to be a dead end (§4), not implemented.
 - **`knownOutcomes`/`interstitials` are empty in the compiled artifact** — one happy-path run can't discover a dialog it never hit. A real pipeline merges multiple runs, or hand-authors these as v1 does.
 - **`reauth` is a declared no-op** — referenced for schema completeness, no credential-refresh flow behind it.
 - **A general compiler CLI** — `scripts/compile.ts` hardcodes this capability's output schema; the compilation logic itself takes it as a typed parameter and is fully generic.
-- **The capability catalog** — Zod already emits JSON Schema per artifact; exposing it as Claude tool definitions is the natural next stretch, not built.
 - **Desktop adapter** — interface designed to accommodate one (§4), not implemented.
+- **A version-variant layer between capability and tenant binding** — the three-layer model in §4 collapses to two in this build (base capability, tenant binding); a vendor-release variant layer is designed for but not exercised, since one vendor product version was in scope.
 
-Next, in order: the capability catalog (nearly free given the schema already emits JSON Schema); a thin `TenantBinding` + variant-B demo; multi-run stability scoring on the existing verification harness; bounded single-step assisted repair (schema already reserves the field); production secrets/evidence-retention controls.
+Next, in order: multi-run stability scoring on the existing verification harness; bounded single-step assisted repair (schema already reserves the field); a second tenant binding exercising the version-variant layer; production secrets/evidence-retention controls.

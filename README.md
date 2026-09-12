@@ -9,12 +9,10 @@ human when it can't safely proceed.
 > The model discovers. The artifact becomes a reusable capability.
 > Deterministic replay is how an AI agent invokes it in production.
 
-Build status: **Slice 7 of 9 complete** (contracts, target app, surface
-adapter + policy, deterministic replay engine, recoverable conditions,
-session broker + human handoff, genuine LLM-driven discovery, compiler +
-verification gate). See [`docs/slices.md`](docs/slices.md) for the full
-plan and current progress, and [`REPORT.md`](REPORT.md) for the design
-write-up.
+Build status: **all 9 slices complete**, including both stretch goals
+(multi-tenant resolution, capability catalog). See
+[`docs/slices.md`](docs/slices.md) for the full plan, and
+[`REPORT.md`](REPORT.md) for the design write-up.
 
 **Running without an API key:** `npm run build`, `npm test`,
 `npm run validate:artifacts`, the target app, and every `npm run replay`
@@ -194,6 +192,43 @@ screenshot into its `--evidence-dir`. `memberId` is declared `sensitive`
 in the artifact; every one of those files is redacted at capture, not
 scrubbed afterward -- verified by grepping the evidence directories for
 the raw value.
+
+## Stretch: multi-tenant reuse
+
+The same verified `v2` artifact, recorded against tenant A, replayed
+against tenant B's differently-labeled instance of the same vendor
+product via a `TenantBinding` -- no re-recording. In one terminal:
+
+```bash
+TENANT_VARIANT=B PORT=4174 npm run target-app
+```
+
+In another:
+```bash
+npm run replay:tenant -- --capability member.read-savings-balance --version 2 \
+  --binding tenants/credit-union-b.json --input memberId=12345 \
+  --evidence-dir evidence/replay-tenant-b
+```
+
+Variant B renders "Customer Number" instead of "Member ID" and
+"Products" instead of "Accounts" -- confirm with `curl` if you like
+before running the replay. `tenants/credit-union-b.json` overrides only
+those two `targetRegistry` entries; everything else (steps, checkpoint,
+the other two extraction targets) is untouched from the base artifact.
+
+## Stretch: capability catalog
+
+Every `verified`/`approved` artifact becomes an Anthropic tool
+definition, generated from the same Zod schema that validates the
+artifact file. With the target app running:
+
+```bash
+npm run catalog:demo -- --request "What is member 12345's current savings balance?"
+```
+
+Claude sees the catalog (only `v2` -- `v1` is still `draft` and is
+excluded), picks the matching capability, supplies typed arguments, and
+the deterministic replay engine (not the model) executes it.
 
 ## Design write-up
 

@@ -6,7 +6,19 @@
  * rung 1. A shared <style> block (not inline style attributes) gives it a
  * consistent period-appropriate look without violating the
  * no-inline-styles convention.
+ *
+ * Multi-tenant stretch demo: TENANT_VARIANT=B renders the same
+ * underlying vendor product with different field/link wording -- a
+ * realistic white-label scenario (two credit unions on the same core
+ * banking product, branded differently). This is what a TenantBinding's
+ * targetOverrides exist to survive without re-recording the capability;
+ * see src/multitenant/resolve.ts and tenants/credit-union-b.json.
  */
+const VARIANT = process.env.TENANT_VARIANT === 'B' ? 'B' : 'A';
+const LABELS =
+  VARIANT === 'B'
+    ? { titlebar: 'Northshore Member Portal', memberIdLabel: 'Customer Number', accountsLinkText: 'Products' }
+    : { titlebar: 'Member Servicing Console', memberIdLabel: 'Member ID', accountsLinkText: 'Accounts' };
 
 const STYLE = `
   body { font-family: Tahoma, Verdana, sans-serif; font-size: 13px; background: #ECE9D8; margin: 0; }
@@ -33,7 +45,7 @@ export function pageShell(title: string, bodyHtml: string): string {
   <style>${STYLE}</style>
 </head>
 <body>
-  <div class="titlebar">Member Servicing Console</div>
+  <div class="titlebar">${LABELS.titlebar}</div>
   <div class="content">${bodyHtml}</div>
 </body>
 </html>`;
@@ -62,7 +74,7 @@ export function memberSearchPage(): string {
     `
     <form method="post" action="/member-search">
       <table class="form">
-        <tr><td>Member ID</td><td><input type="text" name="memberId" /></td></tr>
+        <tr><td>${LABELS.memberIdLabel}</td><td><input type="text" name="memberId" /></td></tr>
         <tr><td></td><td><button type="submit">Search</button></td></tr>
       </table>
     </form>
@@ -83,7 +95,7 @@ export function memberDetailPage(memberId: string, name: string): string {
     `Member ${memberId}`,
     `
     <p>Member: ${name} (${memberId})</p>
-    <p><a href="/member/${memberId}/accounts">Accounts</a></p>
+    <p><a href="/member/${memberId}/accounts">${LABELS.accountsLinkText}</a></p>
   `,
   );
 }
