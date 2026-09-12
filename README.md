@@ -13,8 +13,15 @@ Build status: **Slice 7 of 9 complete** (contracts, target app, surface
 adapter + policy, deterministic replay engine, recoverable conditions,
 session broker + human handoff, genuine LLM-driven discovery, compiler +
 verification gate). See [`docs/slices.md`](docs/slices.md) for the full
-plan and current progress, and `REPORT.md` (in progress) for the design
+plan and current progress, and [`REPORT.md`](REPORT.md) for the design
 write-up.
+
+**Running without an API key:** `npm run build`, `npm test`,
+`npm run validate:artifacts`, the target app, and every `npm run replay`
+/ `npm run smoke:adapter` / `npm run operator` command below work with
+only the local target app running — no internet access or API key
+needed. Only `npm run discover` and `npm run compile` call the Anthropic
+API and need `ANTHROPIC_API_KEY`.
 
 ## Setup
 
@@ -28,8 +35,8 @@ npm run validate:artifacts # validate every artifact in /capabilities against th
 npm run emit:jsonschema    # regenerate capabilities/schema.json from the Zod source of truth
 ```
 
-Copy `.env.example` to `.env` and set `ANTHROPIC_API_KEY` once the discovery
-loop (Slice 6) is in place. Nothing before that slice needs an API key.
+Copy `.env.example` to `.env` and set `ANTHROPIC_API_KEY` if you want to run
+discovery or compilation (see below) — nothing else needs it.
 
 ## What's here so far
 
@@ -188,14 +195,13 @@ in the artifact; every one of those files is redacted at capture, not
 scrubbed afterward -- verified by grepping the evidence directories for
 the raw value.
 
-Once Slice 6 lands:
-```bash
-npm run discover -- --goal "Look up member 12345 and read their savings balance" --target local-bank
-```
-
 ## Design write-up
 
-`REPORT.md` (added from Slice 5) covers architecture, the artifact schema,
+[`REPORT.md`](REPORT.md) covers architecture, the artifact schema,
 determinism and error handling, heterogeneity and multi-tenant reuse,
 escalation and handoff, safety, and what was deliberately cut — in that
 order, per the take-home's required headings.
+[`docs/phase-2-scale.md`](docs/phase-2-scale.md) is the multi-tenant/scale
+design referenced from §4 — explicitly not built, per the brief's own
+guidance that designing for scale is valuable and building the
+infrastructure prematurely is not.
