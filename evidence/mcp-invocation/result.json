@@ -1,9 +1,11 @@
 {
   "status": "success",
   "outputs": {
-    "balance": "9310.25",
-    "currency": "USD",
-    "accountId": "SAV-40988"
+    "account": {
+      "balance": "4235.67",
+      "currency": "USD",
+      "accountId": "SAV-88213"
+    }
   },
   "evidenceRef": "evidence/mcp-invocation"
 }

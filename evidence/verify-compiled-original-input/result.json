@@ -1,9 +1,11 @@
 {
   "status": "success",
   "outputs": {
-    "balance": "4235.67",
-    "currency": "USD",
-    "accountId": "SAV-88213"
+    "account": {
+      "balance": "4235.67",
+      "currency": "USD",
+      "accountId": "SAV-88213"
+    }
   },
   "evidenceRef": "evidence/verify-compiled-original-input"
 }

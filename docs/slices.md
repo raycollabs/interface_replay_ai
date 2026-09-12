@@ -320,6 +320,55 @@ prove the mechanism).
   input (12345) afterward — both members work. Redaction re-verified
   across compile and verification evidence — clean.
 
+  **Two gaps closed on review**, requirement 3.2 ("after a successful
+  run, emit a typed, serializable artifact"; "typed outputs / data to
+  extract and their shape"):
+
+  1. **Emission wasn't automatic.** `npm run compile` always existed but
+     was a second, separate command an operator had to remember to run —
+     nothing made emission happen *as a consequence of* a successful run,
+     which is the literal ask. Closed with `--auto-compile` on
+     `scripts/discover.ts`: a successful discovery run now compiles
+     straight into a draft artifact in the same command, taking
+     `--output-schema <path>` (validated against the new
+     `DesiredOutputFileSchema`) plus `--capability-id`/`--version`. It
+     automates only that one step — verification and promotion stay
+     separate, deliberate commands, so "verified" keeps meaning something
+     was actually confirmed to generalize, not just that compilation
+     didn't throw. `capabilities/member.read-savings-balance.v3.json` was
+     produced this way end-to-end, then verified on `memberId=67890` and
+     promoted.
+  2. **"Shape" was a flat type tag, not a structure.** `OutputDef.type`
+     was `'string'|'number'|'boolean'|'decimal'` — one flat field per
+     extracted fact, with no way to express that `balance`, `currency`,
+     and `accountId` are three facets of one `account`, which is what a
+     calling agent actually wants back. Replaced with a recursive
+     `OutputShape` (`src/contracts/capability.ts`): scalar, or
+     `{type:'object', properties}`, or `{type:'array', items}`.
+     `OutputDefSchema.superRefine` enforces a shape-appropriate producer
+     contract, not just shape validity — a scalar needs `sourceStepId`;
+     an object needs `sourceStepsByProperty` naming a step for *every*
+     declared property (checked by name, so a silently-missing producer
+     fails validation); an array is declarable in the schema with no
+     producer requirement, because replay has none yet —
+     `src/replay/assembleOutput.ts` throws a named error for an array
+     shape instead of assembling something empty or wrong. The compiler
+     (`src/compiler/index.ts`) now takes a `DesiredOutput[]` of named,
+     multi-field groups rather than one flat field list; single-field
+     groups still compile to a plain scalar output, multi-field groups
+     compile to an object with `sourceStepsByProperty`. Live-verified the
+     full chain, not just the schema: recompiled `v2` and freshly
+     auto-compiled `v3` both emit `outputs.account` as a real nested
+     value; the MCP server's `tools/list` description renders it
+     recursively (`account (object: balance (decimal), currency
+     (string), accountId (string))`); a live `tools/call` against `v3`
+     returned `{"account":{"balance":"9310.25","currency":"USD",
+     "accountId":"SAV-40988"}}` — the nested structure survives replay,
+     the catalog, and the MCP wire format, not just the artifact JSON at
+     rest. 65/65 unit tests green (7 new for `OutputDefSchema`, 3 new for
+     `assembleOutput`), `validate:artifacts` green across all three
+     artifact versions, redaction re-verified clean.
+
   Documented limitation: `knownOutcomes` and `interstitials` are empty in
   the compiled artifact — a single happy-path discovery run has no way to
   discover a not-found banner or a recoverable dialog it never

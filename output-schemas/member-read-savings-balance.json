@@ -1,0 +1,11 @@
+[
+  {
+    "name": "account",
+    "description": "The member's current savings account.",
+    "fields": [
+      { "name": "balance", "type": "decimal", "columnHeaderHint": "Balance", "semanticPurpose": "account balance field" },
+      { "name": "currency", "type": "string", "columnHeaderHint": "Currency", "semanticPurpose": "account currency field" },
+      { "name": "accountId", "type": "string", "columnHeaderHint": "Account ID", "semanticPurpose": "account identifier field" }
+    ]
+  }
+]

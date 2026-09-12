@@ -1,7 +1,7 @@
 {
-  "runId": "7f0b8df7-35b0-485f-b769-0e87e93d834c",
+  "runId": "b772d6ac-7554-499c-9f68-cf24074b4ae4",
   "capabilityId": "member.read-savings-balance",
-  "capabilityVersion": 1,
+  "capabilityVersion": 3,
   "inputs": {
     "memberId": "[REDACTED]"
   },
@@ -15,9 +15,9 @@
     "ttlMs": 300000
   },
   "resolvedFrom": [
-    "local-legacy-bank-demo/member.read-savings-balance@1"
+    "local-legacy-bank-demo/member.read-savings-balance@3"
   ],
   "operatorNotes": [],
-  "createdAt": "2026-09-12T18:33:05.618Z",
-  "updatedAt": "2026-09-12T18:33:05.924Z"
+  "createdAt": "2026-09-12T18:37:29.765Z",
+  "updatedAt": "2026-09-12T18:37:30.254Z"
 }

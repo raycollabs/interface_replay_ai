@@ -1,5 +1,5 @@
 {
-  "runId": "a417c1d4-ec12-43b2-a74f-dc76dab6d700",
+  "runId": "4c763a08-ca72-4246-a9c1-7d42416019cd",
   "capabilityId": "member.read-savings-balance",
   "capabilityVersion": 2,
   "inputs": {
@@ -19,6 +19,6 @@
     "binding:credit-union-b/member-servicing-console-b"
   ],
   "operatorNotes": [],
-  "createdAt": "2026-09-12T17:51:03.844Z",
-  "updatedAt": "2026-09-12T17:51:04.255Z"
+  "createdAt": "2026-09-12T18:33:27.618Z",
+  "updatedAt": "2026-09-12T18:33:28.044Z"
 }

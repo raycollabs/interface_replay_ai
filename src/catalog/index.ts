@@ -1,7 +1,21 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type Anthropic from '@anthropic-ai/sdk';
-import { CapabilityDefinitionSchema, type CapabilityDefinition } from '../contracts/index.js';
+import { CapabilityDefinitionSchema, type CapabilityDefinition, type OutputShape } from '../contracts/index.js';
+
+/** Human/agent-readable rendering of a (possibly nested) output shape,
+ *  e.g. "object: balance (decimal), currency (string), accountId (string)". */
+function describeShape(shape: OutputShape): string {
+  if (shape.type === 'object') {
+    return `object: ${Object.entries(shape.properties)
+      .map(([name, sub]) => `${name} (${describeShape(sub)})`)
+      .join(', ')}`;
+  }
+  if (shape.type === 'array') {
+    return `array of ${describeShape(shape.items)}`;
+  }
+  return shape.type;
+}
 
 /**
  * "Think of it as a capability an AI agent can call" -- the brief's own
@@ -42,7 +56,7 @@ function toToolDefinition(capability: CapabilityDefinition): Anthropic.Tool {
   }
 
   const outputsSummary = Object.entries(capability.outputs)
-    .map(([name, def]) => `${name} (${def.type}): ${def.description}`)
+    .map(([name, def]) => `${name} (${describeShape(def.shape)}): ${def.description}`)
     .join('; ');
   const outcomesSummary = capability.knownOutcomes.length
     ? ` May also return a known business outcome instead of these outputs: ${capability.knownOutcomes.map((o) => `${o.code} (${o.description})`).join('; ')}.`

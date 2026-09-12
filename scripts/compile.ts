@@ -77,10 +77,20 @@ async function main() {
 
   const baseUrl = process.env.TARGET_APP_BASE_URL ?? 'http://localhost:4173';
 
+  // One DesiredOutput with three fields -> one object-shaped "account"
+  // output, not three independently-named flat fields. This is the real
+  // "typed outputs and their shape" story: a caller gets back
+  // `account: {balance, currency, accountId}` as one structure.
   const desiredOutputs: DesiredOutput[] = [
-    { name: 'balance', type: 'decimal', description: 'Current savings balance', columnHeaderHint: 'Balance', semanticPurpose: 'account balance field' },
-    { name: 'currency', type: 'string', description: 'ISO currency code', columnHeaderHint: 'Currency', semanticPurpose: 'account currency field' },
-    { name: 'accountId', type: 'string', description: 'Savings account identifier', columnHeaderHint: 'Account ID', semanticPurpose: 'account identifier field' },
+    {
+      name: 'account',
+      description: "The member's current savings account.",
+      fields: [
+        { name: 'balance', type: 'decimal', columnHeaderHint: 'Balance', semanticPurpose: 'account balance field' },
+        { name: 'currency', type: 'string', columnHeaderHint: 'Currency', semanticPurpose: 'account currency field' },
+        { name: 'accountId', type: 'string', columnHeaderHint: 'Account ID', semanticPurpose: 'account identifier field' },
+      ],
+    },
   ];
 
   // The compiler's OWN replay actions during compilation are still

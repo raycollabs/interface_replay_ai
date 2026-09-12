@@ -17,6 +17,7 @@ import type { PolicyContext } from '../policy/allowlist.js';
 import { redact, sensitiveValuesFor } from '../policy/redact.js';
 import { appendEvent, saveResult, saveRunState } from './runStore.js';
 import { readIntervention, waitForResolution, writeIntervention, writeSessionHandle } from '../session/broker.js';
+import { assembleOutput } from './assembleOutput.js';
 
 /**
  * NOTE FOR REVIEWERS: this module makes zero calls to any LLM client. It
@@ -408,7 +409,7 @@ export class ReplayRun {
     }
 
     const page = this.adapter.getPage();
-    const outputs: Record<string, unknown> = {};
+    const outputs: Record<string, string> = {};
 
     stepLoop: for (; this.state.cursor < this.capability.steps.length; this.state.cursor++) {
       const step = this.capability.steps[this.state.cursor]!;
@@ -590,7 +591,7 @@ export class ReplayRun {
 
     const declaredOutputs: Record<string, unknown> = {};
     for (const [name, def] of Object.entries(this.capability.outputs)) {
-      declaredOutputs[name] = outputs[def.sourceStepId];
+      declaredOutputs[name] = assembleOutput(def, outputs);
     }
 
     await this.screenshot('success');

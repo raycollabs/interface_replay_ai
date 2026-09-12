@@ -1,9 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { z } from 'zod';
 import type { Page } from 'playwright';
 import {
   CapabilityDefinitionSchema,
   validateTargetRegistryIntegrity,
+  SEMANTIC_PURPOSES,
   type CapabilityDefinition,
   type CapabilityStep,
   type Condition,
@@ -20,19 +22,63 @@ import { classifyCapability, type ActedControl, type DeclaredOutputPurpose } fro
 import { findColumnLocation } from './tableLookup.js';
 import { canonicalizeRoute } from './canonicalize.js';
 
-export interface DesiredOutput {
+export interface DesiredOutputField {
+  /** Property name -- the output's own top-level name if this is the
+   *  only field on its DesiredOutput (a scalar output), or the property
+   *  name within the assembled object otherwise. */
   name: string;
   type: 'string' | 'number' | 'boolean' | 'decimal';
-  description: string;
-  /** Which <thead><th> text identifies this output's column on the
-   *  final page. Mechanical lookup (tableLookup.ts), not model-guessed --
-   *  a real capability's output contract is a declared thing, not
-   *  inferred from whatever free text the exploring model happened to
-   *  write in its own summary (which varies run to run; verified
-   *  directly across two discovery runs of the same goal). */
+  /** Which <thead><th> text identifies this field's column on the final
+   *  page. Mechanical lookup (tableLookup.ts), not model-guessed -- a
+   *  real capability's output contract is a declared thing, not inferred
+   *  from whatever free text the exploring model happened to write in
+   *  its own summary (which varies run to run; verified directly across
+   *  two discovery runs of the same goal). */
   columnHeaderHint: string;
   semanticPurpose: SemanticPurpose;
 }
+
+/**
+ * One declared output. A single field produces a scalar output; more
+ * than one field produces ONE object-shaped output composed of them --
+ * "account: {balance, currency, accountId}" as a real structure, not
+ * three independently-named flat fields related only by convention. The
+ * per-field MECHANICS (table lookup, targetRegistry entry, extract step)
+ * are identical either way; only the shape of the final `outputs` entry
+ * this produces differs.
+ */
+export interface DesiredOutput {
+  name: string;
+  description: string;
+  fields: DesiredOutputField[];
+}
+
+/**
+ * File-format validator for `--output-schema <path>` (scripts/discover.ts's
+ * `--auto-compile`). This is what keeps auto-compilation honest: the
+ * caller declares the typed output contract up front, the same
+ * requirement `scripts/compile.ts`'s hardcoded literal already enforces
+ * -- auto-compile automates the PIPELINE (discover -> compile in one
+ * command), it does not relax the "outputs are a declared contract, not
+ * inferred from the model's free text" rule that fixed a real bug in
+ * Slice 7.
+ */
+export const DesiredOutputFileSchema = z.array(
+  z.object({
+    name: z.string(),
+    description: z.string(),
+    fields: z
+      .array(
+        z.object({
+          name: z.string(),
+          type: z.enum(['string', 'number', 'boolean', 'decimal']),
+          columnHeaderHint: z.string(),
+          semanticPurpose: z.enum(SEMANTIC_PURPOSES),
+        }),
+      )
+      .min(1),
+  }),
+);
 
 export interface CompileOptions {
   traceDir: string;
@@ -194,33 +240,35 @@ export async function compileCapability(opts: CompileOptions): Promise<Capabilit
       });
     }
 
-    // Pass 2: mechanically locate each declared output's column on the
-    // now-final page -- no model involved, this is a DOM query.
-    const outputLocations: Record<string, { framePath: string[]; rowHeader: string; columnHeader: string }> = {};
-    for (const output of opts.desiredOutputs) {
-      const location = await findColumnLocation(page, output.columnHeaderHint);
-      if ('error' in location) throw new Error(`Output "${output.name}": ${location.error}`);
-      outputLocations[output.name] = location;
+    // Pass 2: mechanically locate each declared output FIELD's column on
+    // the now-final page -- no model involved, this is a DOM query. A
+    // DesiredOutput with multiple fields still gets one lookup per field;
+    // grouping them into one object-shaped output happens later, when
+    // assembling `outputs` -- the location mechanics don't change.
+    const allFields = opts.desiredOutputs.flatMap((o) => o.fields);
+    for (const field of allFields) {
+      const location = await findColumnLocation(page, field.columnHeaderHint);
+      if ('error' in location) throw new Error(`Output field "${field.name}": ${location.error}`);
 
       const outputCandidates: Target['candidates'] = [
         {
           strategy: { type: 'structural_semantic', rowHeader: location.rowHeader, columnHeader: location.columnHeader },
-          rationale: `Mechanically located by column header "${output.columnHeaderHint}" on the compiled artifact's target page; verified to resolve to exactly one cell.`,
+          rationale: `Mechanically located by column header "${field.columnHeaderHint}" on the compiled artifact's target page; verified to resolve to exactly one cell.`,
           confidence: 'high',
         },
       ];
-      const outputTarget: Target = { semanticPurpose: output.semanticPurpose, framePath: location.framePath, candidates: outputCandidates, recordedRung: 0 };
+      const outputTarget: Target = { semanticPurpose: field.semanticPurpose, framePath: location.framePath, candidates: outputCandidates, recordedRung: 0 };
       const verify = await resolveTarget(page, outputTarget);
       if (verify.outcome !== 'resolved') {
-        throw new Error(`Output "${output.name}" location did not verify uniquely: ${verify.outcome}.`);
+        throw new Error(`Output field "${field.name}" location did not verify uniquely: ${verify.outcome}.`);
       }
-      targetRegistry[output.semanticPurpose] = { ...outputTarget, recordedRung: verify.matchedRung };
+      targetRegistry[field.semanticPurpose] = { ...outputTarget, recordedRung: verify.matchedRung };
     }
 
     // Pass 3: the one LLM call -- classify what discovery acted on, and
     // propose the checkpoint. Fresh context; no discovery conversation
     // history carried over.
-    const declaredOutputPurposes: DeclaredOutputPurpose[] = opts.desiredOutputs.map((o) => ({ name: o.name, semanticPurpose: o.semanticPurpose }));
+    const declaredOutputPurposes: DeclaredOutputPurpose[] = allFields.map((f) => ({ name: f.name, semanticPurpose: f.semanticPurpose }));
     const classification = await classifyCapability(opts.apiKey, actedControls, declaredOutputPurposes, opts.goal);
 
     for (const cp of classification.controlPurposes) {
@@ -264,12 +312,12 @@ export async function compileCapability(opts: CompileOptions): Promise<Capabilit
         timeoutMs: 8000,
       });
     }
-    for (const output of opts.desiredOutputs) {
+    for (const field of allFields) {
       steps.push({
-        stepId: `extract-${output.name}`,
-        intent: `Read ${output.description}`,
+        stepId: `extract-${field.name}`,
+        intent: `Read ${field.name}`,
         action: 'extract',
-        targetPurpose: output.semanticPurpose,
+        targetPurpose: field.semanticPurpose,
         riskClass: 'read_only',
         onBlock: 'escalate',
         timeoutMs: 5000,
@@ -332,9 +380,22 @@ export async function compileCapability(opts: CompileOptions): Promise<Capabilit
     const checkpointRoleNames = [...replayed.map((r) => `${r.role}:${r.accessibleName}`)].sort();
     const appFingerprint = createHash('sha256').update(checkpointRoleNames.join('|')).digest('hex').slice(0, 16);
 
+    // A DesiredOutput with one field produces a scalar output; more than
+    // one produces a single object-shaped output composed of them --
+    // this is the actual "typed outputs and their shape" requirement,
+    // not a flat type tag per field.
     const outputs: CapabilityDefinition['outputs'] = {};
     for (const o of opts.desiredOutputs) {
-      outputs[o.name] = { type: o.type, description: o.description, sourceStepId: `extract-${o.name}` };
+      if (o.fields.length === 1) {
+        const field = o.fields[0]!;
+        outputs[o.name] = { shape: { type: field.type }, description: o.description, sourceStepId: `extract-${field.name}` };
+      } else {
+        outputs[o.name] = {
+          shape: { type: 'object', properties: Object.fromEntries(o.fields.map((f) => [f.name, { type: f.type }])) },
+          description: o.description,
+          sourceStepsByProperty: Object.fromEntries(o.fields.map((f) => [f.name, `extract-${f.name}`])),
+        };
+      }
     }
 
     const candidate: CapabilityDefinition = {

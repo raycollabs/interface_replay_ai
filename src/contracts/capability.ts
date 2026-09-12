@@ -120,11 +120,73 @@ export const InputDefSchema = z.object({
 });
 export type InputDef = z.infer<typeof InputDefSchema>;
 
-export const OutputDefSchema = z.object({
-  type: z.enum(['string', 'number', 'boolean', 'decimal']),
-  description: z.string(),
-  sourceStepId: z.string(),
-});
+/**
+ * A real structural shape, not a flat type tag -- a scalar, or an object
+ * composed of named scalar/object properties (recursive), or an array of
+ * a shape. This is what makes "typed outputs and their shape" a genuine
+ * claim: a capability can declare "account: {balance, currency,
+ * accountId}" as ONE structured output, not three independently-named
+ * flat fields that happen to be related only by convention.
+ *
+ * `array` is deliberately representable here even though replay does not
+ * yet produce one (see OutputDefSchema below and REPORT.md's Cuts) --
+ * the schema is designed not to be painted into a corner by what the
+ * current replay engine happens to implement first, the same principle
+ * `targetRegistry` and the multi-tenant layers already follow.
+ */
+export type OutputShape =
+  | { type: 'string' | 'number' | 'boolean' | 'decimal' }
+  | { type: 'object'; properties: Record<string, OutputShape> }
+  | { type: 'array'; items: OutputShape };
+
+// z.lazy() cannot infer its own return type -- same reason ConditionSchema
+// needs the explicit z.ZodType<OutputShape> annotation (condition.ts).
+export const OutputShapeSchema: z.ZodType<OutputShape> = z.lazy(() =>
+  z.discriminatedUnion('type', [
+    z.object({ type: z.literal('string') }),
+    z.object({ type: z.literal('number') }),
+    z.object({ type: z.literal('boolean') }),
+    z.object({ type: z.literal('decimal') }),
+    z.object({ type: z.literal('object'), properties: z.record(z.string(), OutputShapeSchema) }),
+    z.object({ type: z.literal('array'), items: OutputShapeSchema }),
+  ]),
+);
+
+export const OutputDefSchema = z
+  .object({
+    shape: OutputShapeSchema,
+    description: z.string(),
+    /** Required when shape.type is a scalar: the one extract step that
+     *  produces this value. */
+    sourceStepId: z.string().optional(),
+    /** Required when shape.type === 'object': maps each property name to
+     *  the extract step that produces it. One level -- a property whose
+     *  own shape is itself an object is representable in the schema but
+     *  not yet assembled by replay beyond one level of nesting (a real,
+     *  stated limit, not a silent one: see REPORT.md's Cuts). */
+    sourceStepsByProperty: z.record(z.string(), z.string()).optional(),
+  })
+  .superRefine((def, ctx) => {
+    if (def.shape.type === 'object') {
+      if (!def.sourceStepsByProperty) {
+        ctx.addIssue({ code: 'custom', message: 'An object-shaped output requires sourceStepsByProperty.' });
+        return;
+      }
+      for (const propName of Object.keys(def.shape.properties)) {
+        if (!(propName in def.sourceStepsByProperty)) {
+          ctx.addIssue({ code: 'custom', message: `sourceStepsByProperty is missing an entry for property "${propName}".` });
+        }
+      }
+    } else if (def.shape.type === 'array') {
+      // Declarable, not yet replay-producible -- see the OutputShape doc
+      // comment. No sourceStep requirement enforced here since there is
+      // no assembly path for it yet; a capability declaring one will
+      // fail loudly at replay time instead (assembleOutput in
+      // src/replay/engine.ts), not silently produce an empty array.
+    } else if (!def.sourceStepId) {
+      ctx.addIssue({ code: 'custom', message: 'A scalar-shaped output requires sourceStepId.' });
+    }
+  });
 export type OutputDef = z.infer<typeof OutputDefSchema>;
 
 /**

@@ -26,9 +26,22 @@
     }
   },
   "outputs": {
-    "accountId": { "type": "string", "description": "Savings account identifier", "sourceStepId": "extract-account-id" },
-    "balance": { "type": "decimal", "description": "Current savings balance", "sourceStepId": "extract-balance" },
-    "currency": { "type": "string", "description": "ISO currency code", "sourceStepId": "extract-currency" }
+    "account": {
+      "shape": {
+        "type": "object",
+        "properties": {
+          "accountId": { "type": "string" },
+          "balance": { "type": "decimal" },
+          "currency": { "type": "string" }
+        }
+      },
+      "description": "The member's current savings account.",
+      "sourceStepsByProperty": {
+        "accountId": "extract-account-id",
+        "balance": "extract-balance",
+        "currency": "extract-currency"
+      }
+    }
   },
 
   "targetRegistry": {

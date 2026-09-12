@@ -14,6 +14,8 @@ The system is a compiler and runtime for UI-driven capabilities, not a browser-a
 
 **Out-of-process browser via real CDP, not `launchServer()`+`connect()`.** The latter looks like the obvious multi-client primitive and isn't one — verified directly that a second `connect()` call to a `launchServer()` browser gets an isolated view with zero contexts, even though the first client's context still exists. That pairing is for *sequential* reuse across test runs, the opposite of a same-session handoff. Chromium is launched with `--remote-debugging-port` exposed instead; both the replay worker and the operator console attach via `connectOverCDP()` — confirmed separately that this genuinely shares contexts across simultaneous clients before anything was built on top of the assumption.
 
+**Artifact emission is automatic on a successful run, not a separate manual step.** `npm run discover -- --auto-compile --output-schema <path> --capability-id <id> --version <n>` compiles the trace it just recorded straight into a draft artifact in the same command — the brief's "after a successful run, emit a typed artifact," done for real rather than left as a manual `compile` invocation the operator has to remember to run. It deliberately automates only that one step: verification (replay on an input the run never saw) and promotion stay manual, because "verified" is supposed to mean a human or process confirmed the capability generalizes, not merely that the compiler didn't crash on the run that produced it. `capabilities/member.read-savings-balance.v3.json` was produced this way end-to-end, then verified on `memberId=67890` and promoted.
+
 ## 2. Artifact schema
 
 An API contract whose implementation happens through UI automation, not a step recording.
@@ -25,6 +27,8 @@ An API contract whose implementation happens through UI automation, not a step r
 **Every target carries typed strategies, ordered by preference, plus the frame it resolves in** — `framePath` sits on the target, not one strategy variant, since frame context applies to every candidate. Rungs 2–3 (`role_and_name`, `associated_label`) port directly to a desktop accessibility API; the last rung (`visible_text`) doesn't, and the schema flags that rather than hiding it.
 
 **`knownOutcomes` are declared, not caught** — "no such member" is a named, typed result visible before invocation, the direct fix for the brief's own named most-common mistake.
+
+**Output shape is a recursive type, not a flat tag.** `OutputShape = scalar | {type:'object', properties: Record<string, OutputShape>} | {type:'array', items: OutputShape}`, so a capability can declare and actually return real nested structure — `account: {balance, currency, accountId}` as one output, not three flat fields the calling agent has to know are related. `OutputDefSchema`'s `superRefine` enforces the producer contract per shape, not just the shape's own validity: a scalar needs `sourceStepId`; an object needs `sourceStepsByProperty` with an entry for every declared property, checked by name (a property silently missing a producer fails validation, not just an empty properties map); an array is representable at the schema level with no such requirement, because replay has no assembler for it yet (`assembleOutput()` throws a named "no replay-time producer" error rather than emitting an empty or silently-wrong array) — the schema is allowed to describe more than the runtime currently fulfills, and it says so at the point of failure instead of pretending otherwise. `v3`'s live `tools/call` response (`{"account":{"balance":"9310.25","currency":"USD","accountId":"SAV-40988"}}`) is this shape end to end, not just at rest in the JSON file.
 
 **Scope is a ceiling, not a grant**: effective policy is `tenantAllowlist ∩ capability.scope`, so a balance-read capability can't reach a mutation route even if the tenant's own allowlist would permit it.
 
@@ -98,6 +102,7 @@ Deliberately still not built, and why:
 
 - **Production session pooling, queues, multi-tenant plumbing** — not rewarded per the brief; `SessionBroker` is the right abstraction at N=1 (see `docs/phase-2-scale.md`).
 - **`knownOutcomes`/`interstitials` are empty in the compiled artifact** — one happy-path run can't discover a dialog it never hit. A real pipeline merges multiple runs, or hand-authors these as v1 does.
+- **Array output shapes are declarable but not yet assembled at replay** — `OutputShapeSchema` accepts `{type:'array', items:...}` and a reviewer can read one, but `assembleOutput()` throws rather than guessing a wrong or empty list; no compiled artifact in this repo declares one, since the demo capability's outputs are all scalar/object. The producer side (aggregating repeated extractions across a list of rows) is the natural next step, not built here.
 - **`reauth` is a declared no-op** — referenced for schema completeness, no credential-refresh flow behind it.
 - **A general compiler CLI** — `scripts/compile.ts` hardcodes this capability's output schema; the compilation logic itself takes it as a typed parameter and is fully generic.
 - **Desktop adapter** — interface designed to accommodate one (§4), not implemented.

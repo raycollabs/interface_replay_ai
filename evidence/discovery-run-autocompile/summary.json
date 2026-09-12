@@ -1,0 +1,10 @@
+{
+  "status": "success",
+  "outputs": {
+    "savings_balance": "4235.67",
+    "currency": "USD",
+    "account_id": "SAV-88213"
+  },
+  "summary": "Looked up member (Jordan Alvarez, ID [REDACTED]) and viewed their Accounts page. Their savings account (SAV-88213) has a current balance of 4235.67 USD.",
+  "steps": 4
+}

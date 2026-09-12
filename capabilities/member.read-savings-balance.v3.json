@@ -1,10 +1,10 @@
 {
   "schemaVersion": "1.0.0",
   "capabilityId": "member.read-savings-balance",
-  "version": 2,
+  "version": 3,
   "status": "verified",
   "name": "member.read-savings-balance",
-  "description": "Look up a member by identifier and return their current savings balance.",
+  "description": "Look up member {{inputs.memberId}} and read their current savings balance",
   "product": {
     "vendor": "local-legacy-bank-demo",
     "app": "member-servicing-console",
@@ -37,7 +37,6 @@
       "type": "string",
       "required": true,
       "sensitive": true,
-      "pattern": "^[0-9]{5}$",
       "example": "12345"
     }
   },
@@ -266,6 +265,14 @@
       {
         "type": "controlVisible",
         "semanticPurpose": "account balance field"
+      },
+      {
+        "type": "controlVisible",
+        "semanticPurpose": "account currency field"
+      },
+      {
+        "type": "controlVisible",
+        "semanticPurpose": "account identifier field"
       }
     ]
   },
@@ -275,9 +282,9 @@
     "requiresTenantPolicy": true
   },
   "provenance": {
-    "discoveryRunId": "evidence/discovery-run",
+    "discoveryRunId": "evidence/discovery-run-autocompile",
     "model": "claude-sonnet-5",
-    "recordedAt": "2026-09-12T18:32:28.682Z",
+    "recordedAt": "2026-09-12T18:37:15.255Z",
     "adapter": "playwright-web-adapter@0.1.0",
     "appFingerprint": "d02bc7ada672c8c5"
   }

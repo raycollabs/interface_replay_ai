@@ -333,6 +333,56 @@ in the artifact; every one of those files is redacted at capture, not
 scrubbed afterward -- verified by grepping the evidence directories for
 the raw value.
 
+### Emitting the artifact automatically, in one command
+
+The two-step flow above (`discover` then a separate `compile`) still
+requires the operator to remember to run `compile` at all. `--auto-compile`
+closes that: a successful discovery run is compiled into a draft artifact
+in the *same* command, no separate step.
+
+```bash
+npm run discover -- \
+  --goal "Look up member {{inputs.memberId}} and read their current savings balance" \
+  --target-url http://localhost:4173 --entry-route /member-search \
+  --input memberId=12345 --sensitive-input memberId --pattern memberId='^[0-9]{5}$' \
+  --evidence-dir evidence/discovery-run-autocompile \
+  --auto-compile --output-schema output-schemas/member-read-savings-balance.json \
+  --capability-id member.read-savings-balance --version 3
+```
+
+`--output-schema` points at a JSON file declaring the *desired* outputs
+and their fields (name, type, a column-header hint, a `semanticPurpose` for
+classification) -- see `output-schemas/member-read-savings-balance.json`.
+This is what lets the compiler group related fields into one structured
+output (below) instead of one flat field per fact. `--auto-compile`
+automates only artifact emission: verification (replay on an input the
+run never saw) and promotion stay separate, deliberate commands --
+"verified" means a human or process confirmed the capability generalizes,
+not merely that the compiler didn't crash on the run that produced it.
+`capabilities/member.read-savings-balance.v3.json` in this repo was
+produced this way, then verified on `memberId=67890` and promoted exactly
+as in the manual flow above.
+
+### Structured outputs, not flat fields
+
+`v2`/`v3`'s `outputs.account` is a real nested value, not three
+independent flat outputs the caller has to know go together:
+
+```json
+{ "account": { "balance": "9310.25", "currency": "USD", "accountId": "SAV-40988" } }
+```
+
+The schema (`OutputShape` in `src/contracts/capability.ts`) is recursive
+-- `scalar | {type:'object', properties} | {type:'array', items}` -- and
+each shape has its own producer requirement, enforced by
+`OutputDefSchema`'s `superRefine`: a scalar needs one `sourceStepId`; an
+object needs `sourceStepsByProperty` naming a step for *every* declared
+property; an array is representable in the schema (a reviewer can see one
+declared) but `assembleOutput()` deliberately throws rather than guess at
+replay time -- there's no producer for it yet, and a schema is allowed to
+describe more than the runtime currently fulfills as long as it says so
+at the point of failure rather than emitting something silently wrong.
+
 ## Stretch: multi-tenant reuse
 
 The same verified `v2` artifact, recorded against tenant A, replayed

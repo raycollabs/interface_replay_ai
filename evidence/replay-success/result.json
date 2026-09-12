@@ -1,9 +1,11 @@
 {
   "status": "success",
   "outputs": {
-    "accountId": "SAV-88213",
-    "balance": "4235.67",
-    "currency": "USD"
+    "account": {
+      "accountId": "SAV-88213",
+      "balance": "4235.67",
+      "currency": "USD"
+    }
   },
   "evidenceRef": "evidence/replay-success"
 }

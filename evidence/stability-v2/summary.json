@@ -3,36 +3,36 @@
   "version": 2,
   "runs": 5,
   "successRate": 1,
-  "avgDurationMs": 659,
-  "minDurationMs": 622,
-  "maxDurationMs": 729,
+  "avgDurationMs": 632,
+  "minDurationMs": 594,
+  "maxDurationMs": 720,
   "driftingSteps": [],
   "stable": true,
   "perRun": [
     {
       "run": 1,
       "status": "success",
-      "durationMs": 729
+      "durationMs": 720
     },
     {
       "run": 2,
       "status": "success",
-      "durationMs": 661
+      "durationMs": 633
     },
     {
       "run": 3,
       "status": "success",
-      "durationMs": 646
+      "durationMs": 614
     },
     {
       "run": 4,
       "status": "success",
-      "durationMs": 635
+      "durationMs": 594
     },
     {
       "run": 5,
       "status": "success",
-      "durationMs": 622
+      "durationMs": 599
     }
   ]
 }
