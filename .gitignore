@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+*.log
+playwright-report/
+test-results/
+.DS_Store
+Thumbs.db
+
+# Traces/screenshots produced by ad-hoc local runs (not the curated /evidence deliverable)
+tmp/

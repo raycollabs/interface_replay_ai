@@ -1,0 +1,778 @@
+{
+  "$ref": "#/definitions/CapabilityDefinition",
+  "definitions": {
+    "CapabilityDefinition": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "const": "1.0.0"
+        },
+        "capabilityId": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "draft",
+            "verified",
+            "approved",
+            "deprecated",
+            "disabled"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "product": {
+          "type": "object",
+          "properties": {
+            "vendor": {
+              "type": "string"
+            },
+            "app": {
+              "type": "string"
+            },
+            "versionRange": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "vendor",
+            "app",
+            "versionRange"
+          ],
+          "additionalProperties": false
+        },
+        "executionModes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "ATTENDED",
+              "UNATTENDED"
+            ]
+          },
+          "minItems": 1
+        },
+        "scope": {
+          "type": "object",
+          "properties": {
+            "allowedOrigins": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            },
+            "allowedRoutes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            },
+            "allowedActionTypes": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "navigate",
+                  "click",
+                  "type",
+                  "select",
+                  "extract",
+                  "wait",
+                  "assert"
+                ]
+              },
+              "minItems": 1
+            }
+          },
+          "required": [
+            "allowedOrigins",
+            "allowedRoutes",
+            "allowedActionTypes"
+          ],
+          "additionalProperties": false
+        },
+        "inputs": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "string",
+                  "number",
+                  "boolean"
+                ]
+              },
+              "required": {
+                "type": "boolean",
+                "default": true
+              },
+              "sensitive": {
+                "type": "boolean",
+                "default": false
+              },
+              "pattern": {
+                "type": "string"
+              },
+              "example": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "outputs": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "string",
+                  "number",
+                  "boolean",
+                  "decimal"
+                ]
+              },
+              "description": {
+                "type": "string"
+              },
+              "sourceStepId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "description",
+              "sourceStepId"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "knownOutcomes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "detect": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "textVisible"
+                      },
+                      "value": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "textAbsent"
+                      },
+                      "value": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "controlVisible"
+                      },
+                      "semanticPurpose": {
+                        "type": "string",
+                        "enum": [
+                          "login username input",
+                          "login password input",
+                          "login submit",
+                          "session reauth prompt",
+                          "member identifier input",
+                          "member search submit",
+                          "member search result row",
+                          "member not found banner",
+                          "accounts navigation",
+                          "savings account row",
+                          "account balance field",
+                          "account currency field",
+                          "account identifier field",
+                          "sub-account create action",
+                          "sub-account type select",
+                          "sub-account nickname input",
+                          "sub-account confirm submit",
+                          "confirmation screen marker",
+                          "permission denied banner",
+                          "validation error banner",
+                          "unknown dialog dismiss",
+                          "app error banner"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "semanticPurpose"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "controlAbsent"
+                      },
+                      "semanticPurpose": {
+                        "$ref": "#/definitions/CapabilityDefinition/properties/knownOutcomes/items/properties/detect/anyOf/2/properties/semanticPurpose"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "semanticPurpose"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "controlHasValue"
+                      },
+                      "semanticPurpose": {
+                        "$ref": "#/definitions/CapabilityDefinition/properties/knownOutcomes/items/properties/detect/anyOf/2/properties/semanticPurpose"
+                      },
+                      "equals": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "semanticPurpose",
+                      "equals"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "urlMatches"
+                      },
+                      "pattern": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "pattern"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "all"
+                      },
+                      "conditions": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/definitions/CapabilityDefinition/properties/knownOutcomes/items/properties/detect"
+                        },
+                        "minItems": 1
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "conditions"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "any"
+                      },
+                      "conditions": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/definitions/CapabilityDefinition/properties/knownOutcomes/items/properties/detect"
+                        },
+                        "minItems": 1
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "conditions"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "mapsToOutputs": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "code",
+              "description",
+              "detect"
+            ],
+            "additionalProperties": false
+          },
+          "default": []
+        },
+        "interstitials": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "match": {
+                "$ref": "#/definitions/CapabilityDefinition/properties/knownOutcomes/items/properties/detect"
+              },
+              "handle": {
+                "type": "string",
+                "enum": [
+                  "dismiss",
+                  "retry",
+                  "reauth",
+                  "escalate"
+                ]
+              },
+              "maxAttempts": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "default": 1
+              }
+            },
+            "required": [
+              "match",
+              "handle"
+            ],
+            "additionalProperties": false
+          },
+          "default": []
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "stepId": {
+                "type": "string"
+              },
+              "intent": {
+                "type": "string"
+              },
+              "action": {
+                "$ref": "#/definitions/CapabilityDefinition/properties/scope/properties/allowedActionTypes/items"
+              },
+              "target": {
+                "type": "object",
+                "properties": {
+                  "semanticPurpose": {
+                    "type": "string",
+                    "enum": [
+                      "login username input",
+                      "login password input",
+                      "login submit",
+                      "session reauth prompt",
+                      "member identifier input",
+                      "member search submit",
+                      "member search result row",
+                      "member not found banner",
+                      "accounts navigation",
+                      "savings account row",
+                      "account balance field",
+                      "account currency field",
+                      "account identifier field",
+                      "sub-account create action",
+                      "sub-account type select",
+                      "sub-account nickname input",
+                      "sub-account confirm submit",
+                      "confirmation screen marker",
+                      "permission denied banner",
+                      "validation error banner",
+                      "unknown dialog dismiss",
+                      "app error banner"
+                    ]
+                  },
+                  "candidates": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "strategy": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "semantic_id"
+                                },
+                                "id": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "id"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "role_and_name"
+                                },
+                                "role": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "exact": {
+                                  "type": "boolean",
+                                  "default": true
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "role",
+                                "name"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "associated_label"
+                                },
+                                "label": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "label"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "structural_semantic"
+                                },
+                                "framePath": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "default": []
+                                },
+                                "rowHeader": {
+                                  "type": "string"
+                                },
+                                "columnHeader": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "rowHeader",
+                                "columnHeader"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "text_anchor"
+                                },
+                                "anchorText": {
+                                  "type": "string"
+                                },
+                                "relationship": {
+                                  "type": "string",
+                                  "enum": [
+                                    "first-input-below",
+                                    "same-row",
+                                    "next-sibling"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "anchorText",
+                                "relationship"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "visible_text"
+                                },
+                                "text": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "text"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ]
+                        },
+                        "rationale": {
+                          "type": "string"
+                        },
+                        "confidence": {
+                          "type": "string",
+                          "enum": [
+                            "high",
+                            "medium",
+                            "low"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "strategy",
+                        "rationale",
+                        "confidence"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "minItems": 1
+                  },
+                  "recordedRung": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "semanticPurpose",
+                  "candidates",
+                  "recordedRung"
+                ],
+                "additionalProperties": false
+              },
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "literal": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "literal"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "paramRef": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "paramRef"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "precondition": {
+                "$ref": "#/definitions/CapabilityDefinition/properties/knownOutcomes/items/properties/detect"
+              },
+              "postcondition": {
+                "$ref": "#/definitions/CapabilityDefinition/properties/knownOutcomes/items/properties/detect"
+              },
+              "riskClass": {
+                "type": "string",
+                "enum": [
+                  "read_only",
+                  "safe_reversible",
+                  "mutating_reversible",
+                  "risky_irreversible"
+                ]
+              },
+              "onBlock": {
+                "type": "string",
+                "enum": [
+                  "escalate",
+                  "fail"
+                ],
+                "default": "escalate"
+              },
+              "timeoutMs": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "default": 5000
+              }
+            },
+            "required": [
+              "stepId",
+              "intent",
+              "action",
+              "riskClass"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1
+        },
+        "checkpoint": {
+          "$ref": "#/definitions/CapabilityDefinition/properties/knownOutcomes/items/properties/detect"
+        },
+        "commitBoundary": {
+          "type": "object",
+          "properties": {
+            "stepId": {
+              "type": "string"
+            },
+            "idempotencyProbe": {
+              "$ref": "#/definitions/CapabilityDefinition/properties/knownOutcomes/items/properties/detect"
+            }
+          },
+          "required": [
+            "stepId"
+          ],
+          "additionalProperties": false
+        },
+        "assistedRepair": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": false
+            },
+            "maxSteps": {
+              "type": "number",
+              "const": 1,
+              "default": 1
+            },
+            "requiresTenantPolicy": {
+              "type": "boolean",
+              "default": true
+            }
+          },
+          "additionalProperties": false,
+          "default": {
+            "enabled": false,
+            "maxSteps": 1,
+            "requiresTenantPolicy": true
+          }
+        },
+        "provenance": {
+          "type": "object",
+          "properties": {
+            "discoveryRunId": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            },
+            "recordedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "adapter": {
+              "type": "string"
+            },
+            "appFingerprint": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "recordedAt",
+            "adapter"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "capabilityId",
+        "version",
+        "status",
+        "name",
+        "description",
+        "product",
+        "executionModes",
+        "scope",
+        "inputs",
+        "outputs",
+        "steps",
+        "checkpoint",
+        "provenance"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

@@ -1,0 +1,230 @@
+{
+  "schemaVersion": "1.0.0",
+  "capabilityId": "member.read-savings-balance",
+  "version": 1,
+  "status": "draft",
+  "name": "Read member savings balance",
+  "description": "Looks up a member by identifier and returns their current savings account balance.",
+  "product": {
+    "vendor": "local-legacy-bank-demo",
+    "app": "member-servicing-console",
+    "versionRange": "1.x"
+  },
+  "executionModes": ["ATTENDED", "UNATTENDED"],
+  "scope": {
+    "allowedOrigins": ["http://localhost:4173"],
+    "allowedRoutes": ["/login", "/member-search", "/member/*", "/member/*/accounts"],
+    "allowedActionTypes": ["navigate", "click", "type", "extract", "wait", "assert"]
+  },
+  "inputs": {
+    "memberId": {
+      "type": "string",
+      "required": true,
+      "sensitive": true,
+      "pattern": "^[0-9]{5}$",
+      "example": "12345"
+    }
+  },
+  "outputs": {
+    "accountId": { "type": "string", "description": "Savings account identifier", "sourceStepId": "extract-account-id" },
+    "balance": { "type": "decimal", "description": "Current savings balance", "sourceStepId": "extract-balance" },
+    "currency": { "type": "string", "description": "ISO currency code", "sourceStepId": "extract-currency" }
+  },
+  "knownOutcomes": [
+    {
+      "code": "MEMBER_NOT_FOUND",
+      "description": "No member matched the supplied identifier. A legitimate result, not a failure.",
+      "detect": { "type": "controlVisible", "semanticPurpose": "member not found banner" },
+      "mapsToOutputs": { "found": "false" }
+    }
+  ],
+  "interstitials": [
+    {
+      "match": { "type": "controlVisible", "semanticPurpose": "session reauth prompt" },
+      "handle": "reauth",
+      "maxAttempts": 1
+    }
+  ],
+  "steps": [
+    {
+      "stepId": "navigate-search",
+      "intent": "Open the member search screen",
+      "action": "navigate",
+      "value": { "literal": "/member-search" },
+      "postcondition": { "type": "controlVisible", "semanticPurpose": "member identifier input" },
+      "riskClass": "read_only",
+      "onBlock": "escalate",
+      "timeoutMs": 8000
+    },
+    {
+      "stepId": "enter-member-id",
+      "intent": "Enter the member identifier to search for",
+      "action": "type",
+      "target": {
+        "semanticPurpose": "member identifier input",
+        "recordedRung": 2,
+        "candidates": [
+          {
+            "strategy": { "type": "role_and_name", "role": "textbox", "name": "Member ID", "exact": true },
+            "rationale": "Accessible role+name is stable across label rewording and survives table/frame layout changes.",
+            "confidence": "high"
+          },
+          {
+            "strategy": { "type": "associated_label", "label": "Member ID" },
+            "rationale": "Fallback if the accessible name is stripped by a future markup change; same visible label.",
+            "confidence": "medium"
+          }
+        ]
+      },
+      "value": { "paramRef": "memberId" },
+      "postcondition": { "type": "controlHasValue", "semanticPurpose": "member identifier input", "equals": "{{inputs.memberId}}" },
+      "riskClass": "read_only",
+      "onBlock": "escalate",
+      "timeoutMs": 5000
+    },
+    {
+      "stepId": "submit-search",
+      "intent": "Submit the member search",
+      "action": "click",
+      "target": {
+        "semanticPurpose": "member search submit",
+        "recordedRung": 2,
+        "candidates": [
+          {
+            "strategy": { "type": "role_and_name", "role": "button", "name": "Search", "exact": true },
+            "rationale": "Single named submit control on the search form; role+name is unambiguous.",
+            "confidence": "high"
+          }
+        ]
+      },
+      "postcondition": {
+        "type": "any",
+        "conditions": [
+          { "type": "controlVisible", "semanticPurpose": "accounts navigation" },
+          { "type": "controlVisible", "semanticPurpose": "member not found banner" }
+        ]
+      },
+      "riskClass": "read_only",
+      "onBlock": "escalate",
+      "timeoutMs": 10000
+    },
+    {
+      "stepId": "open-accounts",
+      "intent": "Open the member's accounts tab",
+      "action": "click",
+      "target": {
+        "semanticPurpose": "accounts navigation",
+        "recordedRung": 2,
+        "candidates": [
+          {
+            "strategy": { "type": "role_and_name", "role": "link", "name": "Accounts", "exact": true },
+            "rationale": "Primary in-page navigation control; stable role+name.",
+            "confidence": "high"
+          },
+          {
+            "strategy": {
+              "type": "structural_semantic",
+              "framePath": ["main"],
+              "rowHeader": "Accounts",
+              "columnHeader": "Navigation"
+            },
+            "rationale": "Table-layout fallback for the legacy frameset variant of this screen.",
+            "confidence": "medium"
+          }
+        ]
+      },
+      "postcondition": { "type": "controlVisible", "semanticPurpose": "savings account row" },
+      "riskClass": "read_only",
+      "onBlock": "escalate",
+      "timeoutMs": 8000
+    },
+    {
+      "stepId": "extract-account-id",
+      "intent": "Read the savings account identifier",
+      "action": "extract",
+      "target": {
+        "semanticPurpose": "account identifier field",
+        "recordedRung": 5,
+        "candidates": [
+          {
+            "strategy": {
+              "type": "structural_semantic",
+              "framePath": [],
+              "rowHeader": "Savings",
+              "columnHeader": "Account ID"
+            },
+            "rationale": "Legacy table layout has no test IDs; row/column header pair is the most semantically stable locator available.",
+            "confidence": "high"
+          }
+        ]
+      },
+      "riskClass": "read_only",
+      "onBlock": "escalate",
+      "timeoutMs": 5000
+    },
+    {
+      "stepId": "extract-balance",
+      "intent": "Read the current savings balance",
+      "action": "extract",
+      "target": {
+        "semanticPurpose": "account balance field",
+        "recordedRung": 5,
+        "candidates": [
+          {
+            "strategy": {
+              "type": "structural_semantic",
+              "framePath": [],
+              "rowHeader": "Savings",
+              "columnHeader": "Balance"
+            },
+            "rationale": "Same table; column header 'Balance' is the semantic key, independent of visual position.",
+            "confidence": "high"
+          }
+        ]
+      },
+      "riskClass": "read_only",
+      "onBlock": "escalate",
+      "timeoutMs": 5000
+    },
+    {
+      "stepId": "extract-currency",
+      "intent": "Read the account currency",
+      "action": "extract",
+      "target": {
+        "semanticPurpose": "account currency field",
+        "recordedRung": 5,
+        "candidates": [
+          {
+            "strategy": {
+              "type": "structural_semantic",
+              "framePath": [],
+              "rowHeader": "Savings",
+              "columnHeader": "Currency"
+            },
+            "rationale": "Same table; column header 'Currency'.",
+            "confidence": "high"
+          }
+        ]
+      },
+      "riskClass": "read_only",
+      "onBlock": "escalate",
+      "timeoutMs": 5000
+    }
+  ],
+  "checkpoint": {
+    "type": "all",
+    "conditions": [
+      { "type": "controlVisible", "semanticPurpose": "savings account row" },
+      { "type": "controlVisible", "semanticPurpose": "account balance field" }
+    ]
+  },
+  "assistedRepair": {
+    "enabled": false,
+    "maxSteps": 1,
+    "requiresTenantPolicy": true
+  },
+  "provenance": {
+    "recordedAt": "2026-09-12T00:00:00.000Z",
+    "adapter": "playwright-web-adapter@0.1.0"
+  }
+}
