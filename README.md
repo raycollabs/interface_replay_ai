@@ -9,8 +9,10 @@ human when it can't safely proceed.
 > The model discovers. The artifact becomes a reusable capability.
 > Deterministic replay is how an AI agent invokes it in production.
 
-Build status: **all 9 slices complete**, including both stretch goals
-(multi-tenant resolution, capability catalog). See
+Build status: **all 9 slices complete**, plus three of six optional
+stretch goals built in full (§8) — more than the brief's own "pick at
+most one or two," defended directly in
+[`STRETCH_GOALS.md`](STRETCH_GOALS.md). See
 [`docs/slices.md`](docs/slices.md) for the full build history,
 [`REPORT.md`](REPORT.md) for the design write-up,
 [`COMPLIANCE.md`](COMPLIANCE.md) for a requirement-by-requirement
