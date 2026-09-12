@@ -12,6 +12,7 @@ import {
   unknownDialogPage,
   unresolvableNoticePage,
   loadingPartial,
+  permissionDeniedPage,
 } from './templates.js';
 
 const PORT = Number(process.env.PORT ?? 4173);
@@ -46,7 +47,12 @@ app.get('/', (req, res) => {
 });
 
 app.get('/login', (req, res) => {
-  res.send(loginPage());
+  // 3.3 gap closure: distinguishes a plain landing on /login from being
+  // bounced there mid-flow by SESSION_EXPIRED_MEMBER_ID below, so the
+  // login page itself explains why an operator (or a suspended replay
+  // worker) ended up back here.
+  const message = req.query.reason === 'session_expired' ? 'Your session has expired. Please log in again.' : undefined;
+  res.send(loginPage(message));
 });
 
 app.post('/login', (req, res) => {
@@ -76,8 +82,19 @@ app.get('/member-search', requireAuth, (req, res) => {
   res.send(memberSearchPage());
 });
 
+// 3.3 gap closure: a well-formed identifier (passes the capability's own
+// `^[0-9]{5}$` pattern) that the APP itself refuses to search -- a real
+// business-rule validation failure, distinct from "not found" (which only
+// fires after a genuine lookup). Re-rendering the search page in place
+// (no redirect to a /member route at all) is what makes this
+// unambiguously a search-time validation error, not a lookup failure.
+const VALIDATION_ERROR_MEMBER_ID = '00000';
+
 app.post('/member-search', requireAuth, (req, res) => {
   const memberId = String(req.body?.memberId ?? '').trim();
+  if (memberId === VALIDATION_ERROR_MEMBER_ID) {
+    return res.send(memberSearchPage('Member ID 00000 is reserved for internal test accounts and cannot be searched.'));
+  }
   res.redirect(`/member/${encodeURIComponent(memberId)}`);
 });
 
@@ -95,6 +112,17 @@ const DIALOG_GATED_MEMBER_ID = '44444';
 // auto-dismiss interstitial in the capability -- it exists to require a
 // human decision (Slice 5), not to be auto-recovered like 44444's.
 const ESCALATION_GATED_MEMBER_ID = '33333';
+// 3.3 gap closure: this member's accounts are permanently restricted --
+// a legitimate business outcome (KnownOutcome, not a failure), distinct
+// from ESCALATION_GATED_MEMBER_ID above, which needs a human decision.
+// There is no acknowledgement path here at all; every request is denied.
+const PERMISSION_DENIED_MEMBER_ID = '88888';
+// 3.3 gap closure: this member's FIRST accounts request per session
+// destroys the session server-side and redirects to /login, simulating a
+// session timing out mid-flow. Scoped to one member ID, same reasoning as
+// every other gated fixture in this file: it keeps 12345's happy path an
+// actual zero-incident happy path.
+const SESSION_EXPIRED_MEMBER_ID = '22222';
 
 app.get('/member/:memberId/accounts', requireAuth, (req, res) => {
   const member = MEMBERS[req.params.memberId];
@@ -112,6 +140,16 @@ app.get('/member/:memberId/accounts', requireAuth, (req, res) => {
   // Slice 5: the genuinely-stuck case. No automatic path clears this one.
   if (session && member.memberId === ESCALATION_GATED_MEMBER_ID && !session.escalationAcknowledged.has(member.memberId)) {
     return res.send(unresolvableNoticePage(member.memberId));
+  }
+
+  if (member.memberId === PERMISSION_DENIED_MEMBER_ID) {
+    return res.send(permissionDeniedPage(member.memberId));
+  }
+
+  if (session && member.memberId === SESSION_EXPIRED_MEMBER_ID) {
+    sessions.delete(sid!);
+    res.clearCookie('sid');
+    return res.redirect('/login?reason=session_expired');
   }
 
   res.send(accountsPage(member.memberId));

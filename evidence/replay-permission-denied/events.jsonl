@@ -1,0 +1,14 @@
+{"eventId":"d6c4f966-b338-4e18-9861-ba8d5b8e4645","runId":"fce46b84-434f-4363-85ba-3433fa2803f1","type":"RUN_STARTED","timestamp":"2026-09-12T19:06:05.430Z","data":{"capabilityId":"member.read-savings-balance","mode":"UNATTENDED"}}
+{"eventId":"f37ecfbf-23c1-48c5-aab4-dbc4d17b2e46","runId":"fce46b84-434f-4363-85ba-3433fa2803f1","type":"ACTION_STARTED","stepId":"navigate-search","timestamp":"2026-09-12T19:06:05.431Z","data":{"action":"navigate"}}
+{"eventId":"2f905dcf-fb1c-45fc-8751-e413f2e61c8d","runId":"fce46b84-434f-4363-85ba-3433fa2803f1","type":"ACTION_COMPLETED","stepId":"navigate-search","timestamp":"2026-09-12T19:06:05.440Z","data":{}}
+{"eventId":"1857b642-2e07-45b5-8675-1a6c2f32ea31","runId":"fce46b84-434f-4363-85ba-3433fa2803f1","type":"POSTCONDITION_PASSED","stepId":"navigate-search","timestamp":"2026-09-12T19:06:05.472Z","data":{}}
+{"eventId":"7abda7a5-bb4b-4340-b30f-861b525305b7","runId":"fce46b84-434f-4363-85ba-3433fa2803f1","type":"ACTION_STARTED","stepId":"enter-member-id","timestamp":"2026-09-12T19:06:05.472Z","data":{"action":"type"}}
+{"eventId":"0029fcfc-8c7a-41ed-a89f-0e84c8543752","runId":"fce46b84-434f-4363-85ba-3433fa2803f1","type":"ACTION_COMPLETED","stepId":"enter-member-id","timestamp":"2026-09-12T19:06:05.483Z","data":{"matchedRung":1}}
+{"eventId":"d05d1d09-1a9f-4e35-983b-9d6e340f19bd","runId":"fce46b84-434f-4363-85ba-3433fa2803f1","type":"POSTCONDITION_PASSED","stepId":"enter-member-id","timestamp":"2026-09-12T19:06:05.495Z","data":{}}
+{"eventId":"73c5a01e-65af-42b9-b4c1-dad4126216fb","runId":"fce46b84-434f-4363-85ba-3433fa2803f1","type":"ACTION_STARTED","stepId":"submit-search","timestamp":"2026-09-12T19:06:05.497Z","data":{"action":"click"}}
+{"eventId":"0f707c65-cecb-4199-93b5-c91b5f216cfd","runId":"fce46b84-434f-4363-85ba-3433fa2803f1","type":"ACTION_COMPLETED","stepId":"submit-search","timestamp":"2026-09-12T19:06:05.540Z","data":{"matchedRung":0}}
+{"eventId":"a0bd75a0-86d9-4710-8e87-33770eb9f2d6","runId":"fce46b84-434f-4363-85ba-3433fa2803f1","type":"POSTCONDITION_PASSED","stepId":"submit-search","timestamp":"2026-09-12T19:06:05.563Z","data":{}}
+{"eventId":"6b4e7e47-43c0-4b2a-801e-e3c9ba2b4135","runId":"fce46b84-434f-4363-85ba-3433fa2803f1","type":"ACTION_STARTED","stepId":"open-accounts","timestamp":"2026-09-12T19:06:05.563Z","data":{"action":"click"}}
+{"eventId":"cb6ee6a4-4777-4b53-a10f-229c24651178","runId":"fce46b84-434f-4363-85ba-3433fa2803f1","type":"ACTION_COMPLETED","stepId":"open-accounts","timestamp":"2026-09-12T19:06:05.592Z","data":{"matchedRung":0}}
+{"eventId":"528888a5-a840-4f1d-8f1a-0687bbedf543","runId":"fce46b84-434f-4363-85ba-3433fa2803f1","type":"BUSINESS_OUTCOME_DETECTED","stepId":"open-accounts","timestamp":"2026-09-12T19:06:05.610Z","data":{"code":"PERMISSION_DENIED"}}
+{"eventId":"fa943193-48b5-4289-bb0d-d05c2e6f3280","runId":"fce46b84-434f-4363-85ba-3433fa2803f1","type":"RUN_COMPLETED","timestamp":"2026-09-12T19:06:05.650Z","data":{"status":"business_outcome"}}

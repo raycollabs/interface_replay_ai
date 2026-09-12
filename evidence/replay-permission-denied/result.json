@@ -1,0 +1,10 @@
+{
+  "status": "business_outcome",
+  "code": "PERMISSION_DENIED",
+  "stepId": "open-accounts",
+  "message": "The member exists, but this operator's role cannot view their accounts. A legitimate result, not a failure -- distinct from the escalation-gated member (33333), which needs a human decision rather than a final answer.",
+  "outputs": {
+    "found": "true"
+  },
+  "evidenceRef": "evidence/replay-permission-denied"
+}

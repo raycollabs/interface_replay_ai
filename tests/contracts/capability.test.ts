@@ -81,6 +81,58 @@ describe('CapabilityDefinitionSchema', () => {
   });
 });
 
+describe('sessionLoss (3.3 gap closure -- a session timeout is a real, detectable failure code)', () => {
+  it('is optional -- a capability that never declares it is unaffected', () => {
+    const sample = loadSample();
+    delete sample.sessionLoss;
+    const result = CapabilityDefinitionSchema.safeParse(sample);
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts the sample artifact\'s declared urlMatches-based detector', () => {
+    const parsed = CapabilityDefinitionSchema.parse(loadSample());
+    expect(parsed.sessionLoss).toEqual({ detect: { type: 'urlMatches', pattern: '/login' }, code: 'SESSION_EXPIRED' });
+  });
+
+  it('defaults code to SESSION_EXPIRED when omitted', () => {
+    const sample = loadSample();
+    sample.sessionLoss = { detect: { type: 'urlMatches', pattern: '/login' } };
+    const parsed = CapabilityDefinitionSchema.parse(sample);
+    expect(parsed.sessionLoss?.code).toBe('SESSION_EXPIRED');
+  });
+
+  it('accepts an explicit SESSION_LOST code', () => {
+    const sample = loadSample();
+    sample.sessionLoss = { detect: { type: 'urlMatches', pattern: '/login' }, code: 'SESSION_LOST' };
+    const result = CapabilityDefinitionSchema.safeParse(sample);
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an unrecognized code (closed enum, not free text)', () => {
+    const sample = loadSample();
+    sample.sessionLoss = { detect: { type: 'urlMatches', pattern: '/login' }, code: 'LOGGED_OUT' };
+    const result = CapabilityDefinitionSchema.safeParse(sample);
+    expect(result.success).toBe(false);
+  });
+
+  it('a controlVisible-based sessionLoss detector is included in referential-integrity checking', () => {
+    const sample = loadSample();
+    sample.sessionLoss = { detect: { type: 'controlVisible', semanticPurpose: 'session reauth prompt' } };
+    const parsed = CapabilityDefinitionSchema.parse(sample);
+    // 'session reauth prompt' already has a targetRegistry entry in the sample -- integrity should still pass.
+    expect(validateTargetRegistryIntegrity(parsed)).toEqual([]);
+  });
+
+  it('flags a controlVisible-based sessionLoss detector referencing an unregistered purpose', () => {
+    const sample = loadSample();
+    sample.sessionLoss = { detect: { type: 'controlVisible', semanticPurpose: 'account currency field' } };
+    delete sample.targetRegistry['account currency field'];
+    const parsed = CapabilityDefinitionSchema.parse(sample);
+    const errors = validateTargetRegistryIntegrity(parsed);
+    expect(errors.some((e) => e.includes('account currency field'))).toBe(true);
+  });
+});
+
 describe('ConditionSchema', () => {
   it('accepts a leaf condition', () => {
     const result = ConditionSchema.safeParse({

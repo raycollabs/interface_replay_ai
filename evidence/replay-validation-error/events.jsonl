@@ -1,0 +1,11 @@
+{"eventId":"0ba5612e-e5bd-4db0-970c-44b2a41dcd05","runId":"9739d6ec-fa30-41aa-8a36-be5198572c72","type":"RUN_STARTED","timestamp":"2026-09-12T19:15:25.911Z","data":{"capabilityId":"member.read-savings-balance","mode":"UNATTENDED"}}
+{"eventId":"6e7213a7-879e-45e5-9f87-deb29fa60ae4","runId":"9739d6ec-fa30-41aa-8a36-be5198572c72","type":"ACTION_STARTED","stepId":"navigate-search","timestamp":"2026-09-12T19:15:25.912Z","data":{"action":"navigate"}}
+{"eventId":"09d6c2c8-c247-4a1b-9742-5a1b0c8c9045","runId":"9739d6ec-fa30-41aa-8a36-be5198572c72","type":"ACTION_COMPLETED","stepId":"navigate-search","timestamp":"2026-09-12T19:15:25.920Z","data":{}}
+{"eventId":"34a1be47-519f-4451-aeba-6fb1e069dde2","runId":"9739d6ec-fa30-41aa-8a36-be5198572c72","type":"POSTCONDITION_PASSED","stepId":"navigate-search","timestamp":"2026-09-12T19:15:25.951Z","data":{}}
+{"eventId":"3209ef62-a3c6-4ee2-8089-013dcf5f6c50","runId":"9739d6ec-fa30-41aa-8a36-be5198572c72","type":"ACTION_STARTED","stepId":"enter-member-id","timestamp":"2026-09-12T19:15:25.952Z","data":{"action":"type"}}
+{"eventId":"898a332e-c099-49bd-a825-1e08fbe4ac0f","runId":"9739d6ec-fa30-41aa-8a36-be5198572c72","type":"ACTION_COMPLETED","stepId":"enter-member-id","timestamp":"2026-09-12T19:15:25.962Z","data":{"matchedRung":1}}
+{"eventId":"9c337812-7bd8-479e-a2c5-978cfa6f998a","runId":"9739d6ec-fa30-41aa-8a36-be5198572c72","type":"POSTCONDITION_PASSED","stepId":"enter-member-id","timestamp":"2026-09-12T19:15:25.974Z","data":{}}
+{"eventId":"32c4963f-0e98-4608-b9a3-8560bbecf92c","runId":"9739d6ec-fa30-41aa-8a36-be5198572c72","type":"ACTION_STARTED","stepId":"submit-search","timestamp":"2026-09-12T19:15:25.975Z","data":{"action":"click"}}
+{"eventId":"fbafeb83-3b34-4d45-9ada-d75721578c87","runId":"9739d6ec-fa30-41aa-8a36-be5198572c72","type":"ACTION_COMPLETED","stepId":"submit-search","timestamp":"2026-09-12T19:15:26.019Z","data":{"matchedRung":0}}
+{"eventId":"f3a2e5a3-86eb-4284-8494-df4fd45394b6","runId":"9739d6ec-fa30-41aa-8a36-be5198572c72","type":"BUSINESS_OUTCOME_DETECTED","stepId":"submit-search","timestamp":"2026-09-12T19:15:26.037Z","data":{"code":"VALIDATION_ERROR"}}
+{"eventId":"cdf973b2-032e-4aab-8621-921c8df732eb","runId":"9739d6ec-fa30-41aa-8a36-be5198572c72","type":"RUN_COMPLETED","timestamp":"2026-09-12T19:15:26.104Z","data":{"status":"business_outcome"}}

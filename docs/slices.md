@@ -137,6 +137,66 @@ prove the mechanism).
   grep across all five evidence directories for all four member IDs used
   so far — no leaks.
 
+  **Three gaps closed on review**, requirement 3.3's own named runtime
+  conditions ("a validation error, a 'record not found' result, a
+  permission denial, an unexpected dialog, a session timeout, or a
+  slow/failed load"). Record-not-found, unexpected-dialog, and
+  slow/failed-load were all live-demonstrated above; a careful re-check
+  found the other three were declared vocabulary with nothing behind
+  them — `'permission denied banner'` and `'validation error banner'`
+  sat unused in the closed semantic-purpose list, and `SESSION_EXPIRED`/
+  `SESSION_LOST` sat unused in `FailureCodeSchema`, none ever referenced
+  by a fixture, a `knownOutcome`, or any other code path.
+
+  Closed with real fixtures, not just schema entries: `00000` is a
+  well-formed-but-reserved identifier the app's own search rejects
+  in place (no redirect at all — the search page re-renders with a
+  validation banner, which is what makes it unambiguously a search-time
+  failure rather than a lookup failure); `88888` is a real member whose
+  accounts route always answers "access restricted" instead of data; and
+  `22222` is a real member whose first accounts request per session
+  destroys the session server-side and redirects to `/login`, simulating
+  a mid-flow timeout deterministically. Two new `knownOutcomes` entries
+  (`VALIDATION_ERROR`, `PERMISSION_DENIED`) cover the first two; the third
+  needed a new, capability-level `sessionLoss` field
+  (`{detect: Condition, code: 'SESSION_EXPIRED'|'SESSION_LOST'}`,
+  `src/contracts/capability.ts`) since a session drop isn't a business
+  result reached WITHIN the flow (`knownOutcomes`) or a dismissible
+  overlay ON the current page (`interstitials`) — it's a change in WHICH
+  page you're on. Checked in `src/replay/engine.ts` at every step
+  boundary business outcomes are also checked at, ahead of them (a lost
+  session is more fundamental than any business-outcome banner the flow
+  declares), via `capability.sessionLoss.detect: {type: 'urlMatches',
+  pattern: '/login'}`. Deliberately a hard `failure`, not a recoverable
+  condition or a retry: this build has no credential-refresh flow to fall
+  back on (the existing `reauth` interstitial handler is already a
+  declared no-op for exactly this reason).
+
+  A real targeting bug surfaced on the very first live run, caught by
+  reading the actual result rather than trusting a clean exit: giving the
+  two new banners the SAME role-only `role_and_name` strategy the
+  original "member not found" banner used (`role: 'alert'`, empty name —
+  "any accessible name") made all three indistinguishable to the
+  resolver. Replaying `memberId=00000` reported `MEMBER_NOT_FOUND`
+  instead of `VALIDATION_ERROR`, because `knownOutcomes` are checked in
+  declared order and the first one whose role-only selector matched
+  anything won, regardless of which banner the page actually rendered. A
+  second attempt — matching on a substring of each banner's own message
+  text instead of an empty name — didn't resolve at all: `role="alert"`
+  does not derive its accessible name from content per the ARIA naming
+  spec, so a text-content match silently finds nothing rather than
+  erroring. Fixed by giving each banner div an explicit `aria-label` and
+  matching on it with `exact: true`. Re-verified live afterward: all
+  three new scenarios report their correct, distinct outcome
+  (`evidence/replay-validation-error/`, `evidence/replay-permission-denied/`,
+  `evidence/replay-session-expired/` — the last a genuine `status:
+  "failure", code: "SESSION_EXPIRED"`, the first time that code has ever
+  actually fired), and every pre-existing member (12345, 44444, 55555,
+  33333) still passes exactly as before. 72/72 unit tests green (7 new,
+  covering `sessionLoss`'s optionality, its default code, its closed
+  enum, and its inclusion in `validateTargetRegistryIntegrity`).
+  Redaction re-checked across every new evidence directory — clean.
+
 - [x] **Slice 5 — Session broker + handoff.** A third member fixture,
   `33333`, is the genuinely-stuck case: visually similar to 44444's
   auto-dismissable notice, but its interstitial is declared

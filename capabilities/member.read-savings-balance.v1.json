@@ -80,8 +80,32 @@
       "recordedRung": 2,
       "candidates": [
         {
-          "strategy": { "type": "role_and_name", "role": "alert", "name": "", "exact": false },
-          "rationale": "Rendered as role=alert; matched by role alone since the message text is parameterized per member ID.",
+          "strategy": { "type": "role_and_name", "role": "alert", "name": "Member not found", "exact": true },
+          "rationale": "Rendered as role=alert. Originally matched by role alone (empty name -> any accessible name) when this was the app's only alert-role banner; now that 'validation error banner' and 'permission denied banner' are also role=alert (3.3 gap closure), a name-less match would resolve to whichever knownOutcome happens to be checked first regardless of which banner is actually on the page -- a real ambiguity caught live (see REPORT.md). Fixed with an explicit aria-label on each banner div (role=alert does not derive its accessible name from text content per the ARIA naming spec, so a content-substring match silently resolves to nothing -- also caught live, not assumed) and an exact match against it.",
+          "confidence": "high"
+        }
+      ]
+    },
+    "validation error banner": {
+      "semanticPurpose": "validation error banner",
+      "framePath": [],
+      "recordedRung": 2,
+      "candidates": [
+        {
+          "strategy": { "type": "role_and_name", "role": "alert", "name": "Validation error", "exact": true },
+          "rationale": "3.3 gap closure. Rendered on the search page itself (no redirect), which is what distinguishes a search-time validation failure from a lookup failure. Matched via an explicit aria-label, not a substring of the message text -- role=alert does not derive its accessible name from content, so a text-content match resolves to nothing (caught live).",
+          "confidence": "high"
+        }
+      ]
+    },
+    "permission denied banner": {
+      "semanticPurpose": "permission denied banner",
+      "framePath": [],
+      "recordedRung": 2,
+      "candidates": [
+        {
+          "strategy": { "type": "role_and_name", "role": "alert", "name": "Permission denied", "exact": true },
+          "rationale": "3.3 gap closure. Rendered on the accounts page in place of the real account table for a permission-restricted member. Matched via an explicit aria-label, same reasoning as 'validation error banner' above.",
           "confidence": "high"
         }
       ]
@@ -202,8 +226,24 @@
       "description": "No member matched the supplied identifier. A legitimate result, not a failure.",
       "detect": { "type": "controlVisible", "semanticPurpose": "member not found banner" },
       "mapsToOutputs": { "found": "false" }
+    },
+    {
+      "code": "VALIDATION_ERROR",
+      "description": "The supplied identifier is well-formed but rejected by the app's own business rules (e.g. a reserved test-account range). A legitimate result, not a failure -- distinct from MEMBER_NOT_FOUND, which only fires after a genuine lookup was attempted.",
+      "detect": { "type": "controlVisible", "semanticPurpose": "validation error banner" },
+      "mapsToOutputs": { "found": "false" }
+    },
+    {
+      "code": "PERMISSION_DENIED",
+      "description": "The member exists, but this operator's role cannot view their accounts. A legitimate result, not a failure -- distinct from the escalation-gated member (33333), which needs a human decision rather than a final answer.",
+      "detect": { "type": "controlVisible", "semanticPurpose": "permission denied banner" },
+      "mapsToOutputs": { "found": "true" }
     }
   ],
+  "sessionLoss": {
+    "detect": { "type": "urlMatches", "pattern": "/login" },
+    "code": "SESSION_EXPIRED"
+  },
   "interstitials": [
     {
       "match": { "type": "controlVisible", "semanticPurpose": "session reauth prompt" },
@@ -258,7 +298,8 @@
         "type": "any",
         "conditions": [
           { "type": "controlVisible", "semanticPurpose": "accounts navigation" },
-          { "type": "controlVisible", "semanticPurpose": "member not found banner" }
+          { "type": "controlVisible", "semanticPurpose": "member not found banner" },
+          { "type": "controlVisible", "semanticPurpose": "validation error banner" }
         ]
       },
       "riskClass": "read_only",
@@ -270,7 +311,13 @@
       "intent": "Open the member's accounts tab",
       "action": "click",
       "targetPurpose": "accounts navigation",
-      "postcondition": { "type": "controlVisible", "semanticPurpose": "savings account row" },
+      "postcondition": {
+        "type": "any",
+        "conditions": [
+          { "type": "controlVisible", "semanticPurpose": "savings account row" },
+          { "type": "controlVisible", "semanticPurpose": "permission denied banner" }
+        ]
+      },
       "riskClass": "read_only",
       "onBlock": "escalate",
       "timeoutMs": 8000

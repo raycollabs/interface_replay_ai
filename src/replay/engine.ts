@@ -57,6 +57,25 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+/**
+ * Session loss is checked BEFORE business outcomes, at every step boundary
+ * business outcomes are also checked at -- a lost session is a more
+ * fundamental condition than any business-outcome banner the flow declares
+ * (there is no reliable page to read a business outcome FROM once the
+ * session is gone). Optional: a capability that never declares
+ * `sessionLoss` skips this check entirely rather than every capability
+ * being forced to reason about a condition its flow can't reach.
+ */
+async function detectSessionLoss(
+  page: Page,
+  capability: CapabilityDefinition,
+  inputs: Record<string, unknown>,
+): Promise<{ code: 'SESSION_EXPIRED' | 'SESSION_LOST' } | null> {
+  if (!capability.sessionLoss) return null;
+  const lost = await checkCondition(page, capability.sessionLoss.detect, capability.targetRegistry, inputs);
+  return lost ? { code: capability.sessionLoss.code } : null;
+}
+
 /** Business-outcome probes are evaluated BEFORE postconditions, at every
  *  step boundary -- this ordering is the entire fix for conflating a
  *  legitimate business result ("no such member") with a broken step. */
@@ -346,6 +365,23 @@ export class ReplayRun {
   ): Promise<{ ok: true } | { ok: false; result: ExecutionResult }> {
     const { evidenceDir } = this.opts;
 
+    const sl = await detectSessionLoss(page, this.capability, this.inputs);
+    if (sl) {
+      await this.screenshot('session-lost');
+      const result = await this.finish(
+        {
+          status: 'failure',
+          code: sl.code,
+          stepId: step.stepId,
+          expected: 'the session to remain active after the operator resumed',
+          observed: 'the declared session-loss condition now holds',
+          evidenceRef: evidenceDir,
+        },
+        'FAILED',
+      );
+      return { ok: false, result };
+    }
+
     const bo = await detectBusinessOutcome(page, this.capability, this.inputs);
     if (bo) {
       await this.screenshot('business-outcome');
@@ -418,6 +454,21 @@ export class ReplayRun {
       if (step.precondition) {
         const held = await checkCondition(page, step.precondition, this.capability.targetRegistry, this.inputs);
         if (!held) {
+          const sl = await detectSessionLoss(page, this.capability, this.inputs);
+          if (sl) {
+            await this.screenshot('session-lost');
+            return this.finish(
+              {
+                status: 'failure',
+                code: sl.code,
+                stepId: step.stepId,
+                expected: 'the session to remain active before acting',
+                observed: 'the declared session-loss condition now holds',
+                evidenceRef: evidenceDir,
+              },
+              'FAILED',
+            );
+          }
           const bo = await detectBusinessOutcome(page, this.capability, this.inputs);
           if (bo) {
             this.emit('BUSINESS_OUTCOME_DETECTED', step.stepId, { code: bo.code });
@@ -479,7 +530,23 @@ export class ReplayRun {
         outputs[step.stepId] = extractedText;
       }
 
-      // Business-outcome probes BEFORE postcondition, at every step boundary.
+      // Session loss BEFORE business outcomes, business outcomes BEFORE
+      // postcondition -- both at every step boundary.
+      const slAfterAction = await detectSessionLoss(page, this.capability, this.inputs);
+      if (slAfterAction) {
+        await this.screenshot('session-lost');
+        return this.finish(
+          {
+            status: 'failure',
+            code: slAfterAction.code,
+            stepId: step.stepId,
+            expected: 'the session to remain active after acting',
+            observed: 'the declared session-loss condition now holds',
+            evidenceRef: evidenceDir,
+          },
+          'FAILED',
+        );
+      }
       let bo = await detectBusinessOutcome(page, this.capability, this.inputs);
       if (bo) {
         this.emit('BUSINESS_OUTCOME_DETECTED', step.stepId, { code: bo.code });
@@ -518,6 +585,21 @@ export class ReplayRun {
             'FAILED',
           );
         }
+        const slAfterRecovery = await detectSessionLoss(page, this.capability, this.inputs);
+        if (slAfterRecovery) {
+          await this.screenshot('session-lost');
+          return this.finish(
+            {
+              status: 'failure',
+              code: slAfterRecovery.code,
+              stepId: step.stepId,
+              expected: 'the session to remain active after interstitial recovery',
+              observed: 'the declared session-loss condition now holds',
+              evidenceRef: evidenceDir,
+            },
+            'FAILED',
+          );
+        }
         bo = await detectBusinessOutcome(page, this.capability, this.inputs);
         if (bo) {
           await this.screenshot('business-outcome');
@@ -547,6 +629,21 @@ export class ReplayRun {
       if (step.postcondition) {
         const held = await waitForCondition(page, step.postcondition, this.capability.targetRegistry, this.inputs, step.timeoutMs);
         if (!held) {
+          const slAfterPostcondition = await detectSessionLoss(page, this.capability, this.inputs);
+          if (slAfterPostcondition) {
+            await this.screenshot('session-lost');
+            return this.finish(
+              {
+                status: 'failure',
+                code: slAfterPostcondition.code,
+                stepId: step.stepId,
+                expected: 'the session to remain active while waiting on the postcondition',
+                observed: 'the declared session-loss condition now holds',
+                evidenceRef: evidenceDir,
+              },
+              'FAILED',
+            );
+          }
           const bo2 = await detectBusinessOutcome(page, this.capability, this.inputs);
           if (bo2) {
             await this.screenshot('business-outcome');

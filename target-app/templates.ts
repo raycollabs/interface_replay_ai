@@ -68,10 +68,23 @@ export function loginPage(errorMessage?: string): string {
   );
 }
 
-export function memberSearchPage(): string {
+/**
+ * `validationError`, when present, is a real app-level business-rule
+ * rejection distinct from "not found" (3.3 gap closure) -- the identifier
+ * is well-formed (passes the capability's own `pattern`) but the app
+ * itself refuses to search it, the same way a bank's real system might
+ * reject a reserved/test account range. Re-rendered in place on the SAME
+ * page (no redirect to a member route at all) so it's unambiguously a
+ * search-time validation failure, not a lookup failure.
+ */
+export function memberSearchPage(validationError?: string): string {
+  const banner = validationError
+    ? `<div class="banner-error" role="alert" aria-label="Validation error">${validationError}</div>`
+    : '';
   return pageShell(
     'Member Search',
     `
+    ${banner}
     <form method="post" action="/member-search">
       <table class="form">
         <tr><td>${LABELS.memberIdLabel}</td><td><input type="text" name="memberId" /></td></tr>
@@ -85,8 +98,24 @@ export function memberSearchPage(): string {
 export function memberNotFoundPage(memberId: string): string {
   return pageShell(
     'Member Not Found',
-    `<div class="banner-error" role="alert">No member found for identifier ${memberId}.</div>
+    `<div class="banner-error" role="alert" aria-label="Member not found">No member found for identifier ${memberId}.</div>
      <p><a href="/member-search">Back to search</a></p>`,
+  );
+}
+
+/**
+ * The "permission denial" business outcome (3.3 gap closure): a real
+ * member exists, but this operator's role cannot view their accounts. No
+ * form, no acknowledgement action -- unlike the two interstitial notices
+ * below, there is nothing to dismiss or escalate; this is a legitimate,
+ * final answer the caller needs to know about, exactly like "no such
+ * member" is (KnownOutcome, not a failure).
+ */
+export function permissionDeniedPage(memberId: string): string {
+  return pageShell(
+    `Accounts — Member ${memberId}`,
+    `<div class="banner-error" role="alert" aria-label="Permission denied">Access to this member's accounts is restricted and cannot be viewed with the current operator role.</div>
+     <p><a href="/member/${memberId}">Back to member</a></p>`,
   );
 }
 

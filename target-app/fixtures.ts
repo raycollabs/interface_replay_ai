@@ -67,6 +67,26 @@ export const MEMBERS: Record<string, Member> = {
       { accountType: 'Savings', accountId: 'SAV-40988', balance: '9310.25', currency: 'USD' },
     ],
   },
+  // 3.3 gap closure: a real member whose accounts page always answers
+  // "access restricted" instead of returning data -- a genuine
+  // permission-denial business outcome, not a 404 (member not found) or
+  // an interstitial (nothing to dismiss; there is no automated path
+  // through this at all).
+  '88888': {
+    memberId: '88888',
+    name: 'Restricted Account Holder',
+    accounts: [],
+  },
+  // 3.3 gap closure: a real member whose FIRST accounts request each
+  // session invalidates the session server-side and redirects to /login
+  // -- simulating a session timing out mid-flow. Deterministic and
+  // reproducible (unlike a real wall-clock expiry) while still exercising
+  // a genuine navigation-based detection path, not a canned response.
+  '22222': {
+    memberId: '22222',
+    name: 'Session Timeout Test Holder',
+    accounts: [],
+  },
 };
 
 /** Synthetic operator credential for the demo login form. Not a real secret. */

@@ -254,6 +254,26 @@ export const CapabilityDefinitionSchema = z.object({
   knownOutcomes: z.array(KnownOutcomeSchema).default([]),
   interstitials: z.array(InterstitialSchema).default([]),
 
+  /**
+   * A generic "the session is gone" detector -- distinct from both
+   * knownOutcomes (a business result reached WITHIN the flow) and
+   * interstitials (a dismissible overlay ON the current page). Session
+   * loss instead changes WHICH page you're on -- typically a mid-run
+   * redirect back to an auth screen -- and the only honest response is a
+   * hard failure, not a retry or a guessed recovery: this build has no
+   * credential-refresh flow to fall back on (interstitials[].handle ===
+   * 'reauth' is a declared no-op for exactly this reason). Optional and
+   * capability-level, checked at every step boundary alongside business
+   * outcomes -- a capability whose flow never risks a session drop isn't
+   * forced to declare one.
+   */
+  sessionLoss: z
+    .object({
+      detect: ConditionSchema,
+      code: z.enum(['SESSION_EXPIRED', 'SESSION_LOST']).default('SESSION_EXPIRED'),
+    })
+    .optional(),
+
   steps: z.array(CapabilityStepSchema).min(1),
 
   /** The success condition. Required — a capability without a checkpoint
@@ -343,6 +363,7 @@ export function collectReferencedPurposes(capability: CapabilityDefinition): Set
     collectPurposesFromCondition(interstitial.match, purposes);
     if (interstitial.dismissTargetPurpose) purposes.add(interstitial.dismissTargetPurpose);
   }
+  if (capability.sessionLoss) collectPurposesFromCondition(capability.sessionLoss.detect, purposes);
   return purposes;
 }
 

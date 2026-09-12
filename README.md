@@ -66,6 +66,9 @@ with anything a script is doing:
 | `55555` | A "Loading account data..." placeholder the first time you view its Accounts page — reload to see the real table |
 | `33333` | A notice with **no** way through in the UI itself — this is the one that requires the human-handoff flow (below), not a click |
 | `67890` | A second clean happy path — Savings, SAV-40988, 9310.25 USD |
+| `00000` | Type this into the search box: a validation banner in place, on the search page itself — no redirect, since the identifier is well-formed but rejected by the app's own rule |
+| `88888` | Accounts page always shows "Access... restricted" instead of data — a real member, permanently permission-denied |
+| `22222` | Accounts page redirects you straight back to the login screen with "Your session has expired" — simulates a session timing out mid-flow |
 
 For a non-visual, scriptable version of the same check (every element on
 a page, printed as text, plus a screenshot) without needing to click
@@ -245,6 +248,19 @@ npm run replay -- --capability member.read-savings-balance --version 1 \
 # Recoverable: a transient slow load, recovered by retry
 npm run replay -- --capability member.read-savings-balance --version 1 \
   --input memberId=55555 --evidence-dir evidence/replay-recovered-slow-load
+
+# Business outcome: a validation error the APP itself rejects (well-formed,
+# reserved) -- distinct from "not found", which only fires after a lookup
+npm run replay -- --capability member.read-savings-balance --version 1 \
+  --input memberId=00000 --evidence-dir evidence/replay-validation-error
+
+# Business outcome: permission denied -- a real member, permanently restricted
+npm run replay -- --capability member.read-savings-balance --version 1 \
+  --input memberId=88888 --evidence-dir evidence/replay-permission-denied
+
+# Hard failure: session expires mid-flow -- status: failure, code: SESSION_EXPIRED
+npm run replay -- --capability member.read-savings-balance --version 1 \
+  --input memberId=22222 --evidence-dir evidence/replay-session-expired
 ```
 
 ## Human handoff demo

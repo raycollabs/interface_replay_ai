@@ -1,0 +1,8 @@
+{
+  "status": "failure",
+  "code": "SESSION_EXPIRED",
+  "stepId": "open-accounts",
+  "expected": "the session to remain active after acting",
+  "observed": "the declared session-loss condition now holds",
+  "evidenceRef": "evidence/replay-session-expired"
+}

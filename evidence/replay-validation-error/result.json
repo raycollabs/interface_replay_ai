@@ -1,0 +1,10 @@
+{
+  "status": "business_outcome",
+  "code": "VALIDATION_ERROR",
+  "stepId": "submit-search",
+  "message": "The supplied identifier is well-formed but rejected by the app's own business rules (e.g. a reserved test-account range). A legitimate result, not a failure -- distinct from MEMBER_NOT_FOUND, which only fires after a genuine lookup was attempted.",
+  "outputs": {
+    "found": "false"
+  },
+  "evidenceRef": "evidence/replay-validation-error"
+}
