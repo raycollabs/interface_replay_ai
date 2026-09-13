@@ -59,69 +59,43 @@ flowchart LR
 
 Red = the two problems this proposal addresses: discovery locked to one LLM provider, and `targetRegistry` re-declared per capability.
 
-### Proposed
+### Proposed — two columns, by operational cadence
+
+Redrawn as two columns rather than one left-to-right flow, because the pieces genuinely run on two different cadences: once per goal, and once per invocation.
 
 ```mermaid
 flowchart LR
-    subgraph DISCOVERY["Process: npm run discover"]
+    subgraph COL1["1) Discovery + Schema Adapter — per goal"]
         direction TB
-        LOOP["Discovery Loop<br/>observe → decide → act"]
-        IFACE["DiscoveryModel interface<br/>provider-neutral"]
-        LOOP <--> IFACE
+        D1["Discovery Loop<br/>observe → decide → act<br/>writes trace.jsonl + screenshots"]
+        D2["DiscoveryModel interface<br/>provider-neutral<br/>invokes any LLM to perceive the surface"]
+        D3["Component enricher<br/>classifies controls →<br/>SurfaceComponentLibrary (vendor, app, control)"]
+        D4["Compiler — SDK-style<br/>(ergonomic + raw layers, à la @neon/sdk's pattern)<br/>compiles + saves capability, with tenant overrides"]
+        D1 --> D2 --> D3 --> D4
     end
-    TOOLS["DiscoveryActionSchema (Zod)<br/>→ zod-to-json-schema"] --> IFACE
-    IFACE --> ADP_A["Anthropic adapter"]
-    IFACE --> ADP_B["2nd provider adapter<br/>(future)"]
-    ADP_A --> ANTHROPIC[("Anthropic API")]
-    ADP_B --> OTHER[("Any other provider")]
-    LOOP -->|writes| TRACE[/"trace.jsonl + screenshots"/]
 
-    subgraph COMPILE["Process: npm run compile"]
+    subgraph COL2["2) MCP / Execution — per invocation"]
         direction TB
-        CLASSIFY["classify.ts<br/>1 LLM call, any provider"]
-        COMPILER["compileCapability()"]
-        CLASSIFY --> COMPILER
+        M1["MCP Server<br/>tools/list · tools/call"]
+        M2["Tools interface:<br/>replay · discovery · stability<br/>Zod-derived tool descriptors"]
+        M3["Replay Engine<br/>zero LLM · SurfaceAdapter → Target App"]
+        M4["Human-in-the-loop<br/>Session Broker + Operator Console<br/>(separate process, CDP)"]
+        M1 --> M2 --> M3
+        M3 -.->|stuck| M4
+        M4 -.->|resume| M3
     end
-    TRACE --> CLASSIFY
 
-    COMPILER -->|new-or-reused entry| LIB["SurfaceComponentLibrary<br/>(vendor, app)-scoped, shared<br/>✅ one copy per control"]
-    LIB -.->|config-level override,<br/>same mechanism as TenantBinding| TENANTCFG["Per-tenant overrides"]
-    COMPILER -->|private targets only| ARTA["Capability A<br/>small targetRegistry"]
-    COMPILER -->|private targets only| ARTB["Capability B<br/>small targetRegistry"]
-    ARTA -.->|resolves shared purposes via| LIB
-    ARTB -.->|resolves shared purposes via| LIB
-
-    subgraph REPLAY["Process: npm run replay — zero LLM, unchanged"]
-        direction TB
-        ENGINE["Replay Engine"]
-        ADAPTER["SurfaceAdapter<br/>Playwright + CDP"]
-        ENGINE --> ADAPTER
-    end
-    ARTA -->|loaded| ENGINE
-    LIB -->|loaded| ENGINE
-    ADAPTER -->|perform| APP["Target App"]
-
-    ENGINE -->|stuck| BROKER["Session Broker<br/>intervention.json"]
-    subgraph OPERATOR["Process: npm run operator"]
-        CONSOLE["Operator Console"]
-    end
-    BROKER -.->|CDP attach, same session| CONSOLE
-    CONSOLE -->|resume| ENGINE
-
-    subgraph MCP["Process: npm run mcp — same process, more tools"]
-        CATALOG["Catalog + MCP Server<br/>tools/list · tools/call"]
-    end
-    ARTA -.->|verified/approved only| CATALOG
-    CATALOG -->|invoke capability, in-process| ENGINE
-    CATALOG -->|"NEW: run discovery, in-process"| LOOP
-    CATALOG -->|"NEW: run stability check, in-process"| ENGINE
-    ANYAGENT["Any MCP-compatible agent"] -->|tools/call| CATALOG
+    D4 -->|artifact + library entry| M1
+    M2 -.->|"invoke: run discovery, in-process"| D1
+    M2 -.->|"invoke: run stability check, in-process"| M3
 
     classDef newthing fill:#1e8449,color:#fff,stroke:#000
-    class IFACE,ADP_A,ADP_B,TOOLS,LIB,TENANTCFG newthing
+    class D2,D3,D4,M2 newthing
 ```
 
-Green = new. Everything else — the replay engine, the session-broker/operator-console handoff, the process boundaries themselves — is identical: this is an additive design change, not a rearchitecture.
+Green = new (the provider-neutral interface, the component enricher/compiler, the widened MCP tools interface). Everything else — the replay engine, the session-broker/operator-console handoff, the process boundaries themselves — is identical to what's built today: this is an additive design change, not a rearchitecture.
+
+**Column 2's tools interface widens, it doesn't just add a fourth box.** Today's MCP server exposes exactly one tool family — invoke a capability. The proposal has it expose three, all resolved the same way (Zod schema → tool descriptor, the same mechanism `src/catalog/index.ts` already uses): invoke a capability (existing), run discovery on a new goal (new), and run an N-times stability check on an existing capability (new — `scripts/stability.ts` already does the check, this just exposes it over MCP too). All three stay in-process calls inside the one already-long-running `npm run mcp` server — no per-request subprocess, no new service.
 
 ## The write-up
 
