@@ -18,9 +18,12 @@ most one or two," defended directly in
 [`COMPLIANCE.md`](COMPLIANCE.md) for a requirement-by-requirement
 ask/status/evidence mapping (§3.1–3.7), and
 [`ARCHITECTURAL_DECISIONS.md`](ARCHITECTURAL_DECISIONS.md) for the
-defense of every explicitly-our-call choice (§4), and
+defense of every explicitly-our-call choice (§4),
 [`GLOSSARY.md`](GLOSSARY.md) for the brief's own terms, each pointed at
-where it actually shows up in this repo.
+where it actually shows up in this repo, and
+[`FORWARD_DESIGN.md`](FORWARD_DESIGN.md) for a design-only proposal
+(a shared, vendor/app-scoped component library; provider-neutral
+discovery) building on `COMPLIANCE.md` §3.7 — not built, diagrams included.
 
 ## Setup
 
